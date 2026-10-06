@@ -1,0 +1,175 @@
+mod app;
+mod chess;
+mod engine;
+mod net;
+mod theme;
+mod ui;
+
+use std::io::{self, IsTerminal, Write, stdout};
+use std::process::ExitCode;
+use std::time::Duration;
+
+use ratatui::crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind};
+use ratatui::crossterm::execute;
+
+use app::{App, Side};
+use engine::Level;
+use theme::{Pieces, Settings};
+
+const USAGE: &str = "\
+funchess - chess for the terminal
+
+Usage:
+  funchess                    choose from the menu
+  funchess computer           play the computer
+  funchess local              two players at this keyboard
+  funchess host [PORT]        wait for a player on another computer
+  funchess join ADDRESS       join a game hosted at ADDRESS (name or IP, optionally :PORT)
+  funchess --help | --version
+
+Options:
+  -l, --level LEVEL           beginner, easy (default), medium or hard
+  -w, --white                 play White (default)
+  -b, --black                 play Black
+  -r, --random                play either color, picked at random
+  -t, --theme NAME            forest, wood, ocean, slate, plum or ruby
+  -p, --pieces STYLE          solid, outlined, shaded (pixel art, in a large enough
+                              window), symbols, or letters if your font lacks
+                              chess symbols
+
+The theme, the piece style and the level are remembered for next time.
+The color applies to `computer` and `host`; the joining player gets the other one.
+Network games use a direct connection on port 6464 unless another is given: both
+computers must be on the same network, or the host must be reachable on that port.
+
+In the game: click a piece and then a square, or move the marker with the arrow
+keys and press Enter, or type the two squares (e2 e4).
+Commands are Ctrl with a letter (shown as ^):
+  ^U undo     ^R resign    ^D offer a draw    ^N new game    ^F flip the board
+  ^T theme    ^P pieces    ^Q menu            ^C quit        ?  help
+";
+
+fn fail(msg: &str) -> ExitCode {
+    eprintln!("funchess: {msg}");
+    eprintln!("Try 'funchess --help'.");
+    ExitCode::FAILURE
+}
+
+fn main() -> ExitCode {
+    let truecolor = matches!(std::env::var("COLORTERM").as_deref(), Ok("truecolor" | "24bit"));
+    let settings_path = Settings::path();
+    let mut app = App::new(truecolor, settings_path.as_deref().map(Settings::load).unwrap_or_default());
+    app.settings_path = settings_path;
+    let mut command = None;
+    let mut operand: Option<String> = None;
+
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                print!("{USAGE}");
+                return ExitCode::SUCCESS;
+            }
+            "-V" | "-v" | "--version" => {
+                println!("funchess {}", env!("CARGO_PKG_VERSION"));
+                return ExitCode::SUCCESS;
+            }
+            "-l" | "--level" => match args.next().as_deref().and_then(Level::parse) {
+                Some(level) => app.level = level,
+                None => return fail("--level needs one of: beginner, easy, medium, hard"),
+            },
+            "-w" | "--white" => app.side = Side::White,
+            "-b" | "--black" => app.side = Side::Black,
+            "-r" | "--random" => app.side = Side::Random,
+            "-t" | "--theme" => match args.next().as_deref().and_then(theme::find_theme) {
+                Some(theme) => app.theme = theme,
+                None => return fail("--theme needs one of: forest, wood, ocean, slate, plum, ruby"),
+            },
+            "-p" | "--pieces" => match args.next().as_deref().and_then(Pieces::parse) {
+                Some(pieces) => app.pieces = pieces,
+                None => return fail("--pieces needs one of: solid, outlined, shaded, symbols, letters"),
+            },
+            "--ascii" => app.pieces = Pieces::Letters,
+            "computer" | "local" | "host" | "join" if command.is_none() => command = Some(arg),
+            _ if !arg.starts_with('-') && matches!(command.as_deref(), Some("host" | "join")) && operand.is_none() => operand = Some(arg),
+            _ => return fail(&format!("unknown argument '{arg}'")),
+        }
+    }
+    if command.as_deref() == Some("join") && operand.is_none() {
+        return fail("join needs the host's address, as in 'funchess join 192.168.1.20'");
+    }
+    if !io::stdin().is_terminal() || !stdout().is_terminal() {
+        return fail("this is an interactive game and needs a terminal");
+    }
+    match (command.as_deref(), operand) {
+        (None, _) => {}
+        (Some("computer"), _) => app.start_computer(),
+        (Some("local"), _) => app.start_local(),
+        (Some("host"), port) => {
+            if let Some(port) = port {
+                match port.parse() {
+                    Ok(port) if port > 0 => app.port = port,
+                    _ => return fail("the port must be a number from 1 to 65535"),
+                }
+            }
+            app.start_host();
+        }
+        (Some("join"), Some(address)) => {
+            app.address = address;
+            app.start_join();
+        }
+        (Some(_), _) => unreachable!("the commands are checked above"),
+    }
+    match run(&mut app) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => fail(&e.to_string()),
+    }
+}
+
+/// How long the loop waits for a key before checking on the computer opponent and
+/// the network again.
+const POLL: Duration = Duration::from_millis(50);
+
+fn run(app: &mut App) -> io::Result<()> {
+    // Raw mode, the alternate screen, and a panic hook that undoes both.
+    let mut terminal = ratatui::init();
+    // For clicking pieces. While captured, selecting text needs shift (option on macOS).
+    execute!(stdout(), EnableMouseCapture)?;
+    // FUNCHESS_LOG=file records every key and mouse event as the program receives it,
+    // for working out why a terminal's input is not doing what it should.
+    let mut log = std::env::var_os("FUNCHESS_LOG").and_then(|path| std::fs::File::create(path).ok());
+    let mut redraw = true;
+    let result = loop {
+        redraw |= app.tick();
+        if redraw && let Err(e) = terminal.draw(|f| ui::draw(f, app)) {
+            break Err(e);
+        }
+        redraw = false;
+        if app.quit {
+            break Ok(());
+        }
+        match event::poll(POLL) {
+            Ok(false) => {}
+            Ok(true) => match event::read().inspect(|event| {
+                if let Some(log) = &mut log {
+                    let _ = writeln!(log, "{event:?}");
+                }
+            }) {
+                Ok(Event::Key(key)) if key.kind != KeyEventKind::Release => {
+                    app.on_key(key);
+                    redraw = true;
+                }
+                Ok(Event::Mouse(mouse)) => {
+                    app.on_mouse(mouse);
+                    redraw = true;
+                }
+                Ok(_) => redraw = true,
+                Err(e) => break Err(e),
+            },
+            Err(e) => break Err(e),
+        }
+    };
+    let _ = execute!(stdout(), DisableMouseCapture);
+    ratatui::restore();
+    result
+}

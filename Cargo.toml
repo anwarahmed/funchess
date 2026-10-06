@@ -1,0 +1,22 @@
+[package]
+name = "funchess"
+version = "0.1.0"
+edition = "2024"
+# Oldest toolchain that builds this; the `msrv` CI job keeps it true.
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/anwarahmed/funchess"
+description = "Chess for the terminal: against the computer, two players on one keyboard, or over the network"
+readme = "README.md"
+
+[dependencies]
+ratatui = "0.30.2"
+
+[profile.release]
+lto = true
+# Keep symbol names so a panic in the field has a readable backtrace.
+strip = "debuginfo"
+
+# The engine is far too slow unoptimized to play against in a debug build.
+[profile.dev]
+opt-level = 2
