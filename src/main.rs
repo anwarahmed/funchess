@@ -4,6 +4,7 @@ mod engine;
 mod net;
 mod theme;
 mod ui;
+mod update;
 
 use std::io::{self, IsTerminal, Write, stdout};
 use std::process::ExitCode;
@@ -25,6 +26,8 @@ Usage:
   funchess local              two players at this keyboard
   funchess host [PORT]        wait for a player on another computer
   funchess join ADDRESS       join a game hosted at ADDRESS (name or IP, optionally :PORT)
+  funchess update             check for a newer release now and install it
+  funchess update off | on    stop, or resume, checking when the game starts
   funchess --help | --version
 
 Options:
@@ -37,7 +40,8 @@ Options:
                               window), symbols, or letters if your font lacks
                               chess symbols
 
-The theme, the piece style and the level are remembered for next time.
+The theme, the piece style and the level are remembered for next time, in
+$XDG_STATE_HOME/funchess (~/.local/state/funchess).
 The color applies to `computer` and `host`; the joining player gets the other one.
 Network games use a direct connection on port 6464 unless another is given: both
 computers must be on the same network, or the host must be reachable on that port.
@@ -47,19 +51,23 @@ keys and press Enter, or type the two squares (e2 e4).
 Commands are Ctrl with a letter (shown as ^):
   ^U undo     ^R resign    ^D offer a draw    ^N new game    ^F flip the board
   ^T theme    ^P pieces    ^Q menu            ^C quit        ?  help
+
+Environment:
+  FUNCHESS_NO_UPDATE          set to skip the update check for one run
+  FUNCHESS_LOG                a file to record every key and mouse event in
 ";
 
 fn fail(msg: &str) -> ExitCode {
     eprintln!("funchess: {msg}");
-    eprintln!("Try 'funchess --help'.");
     ExitCode::FAILURE
 }
 
 fn main() -> ExitCode {
     let truecolor = matches!(std::env::var("COLORTERM").as_deref(), Ok("truecolor" | "24bit"));
     let settings_path = Settings::path();
-    let mut app = App::new(truecolor, settings_path.as_deref().map(Settings::load).unwrap_or_default());
-    app.settings_path = settings_path;
+    let mut settings = Settings::load(&settings_path);
+    let mut app = App::new(truecolor, settings);
+    app.settings_path = Some(settings_path.clone());
     let mut command = None;
     let mut operand: Option<String> = None;
 
@@ -71,8 +79,20 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             "-V" | "-v" | "--version" => {
-                println!("funchess {}", env!("CARGO_PKG_VERSION"));
+                println!("funchess {} ({})", update::VERSION, if update::COMMIT.is_empty() { "unknown commit" } else { update::COMMIT });
                 return ExitCode::SUCCESS;
+            }
+            "update" if command.is_none() => {
+                return match args.next().as_deref() {
+                    None => update::command().map_or_else(|e| fail(&e), |()| ExitCode::SUCCESS),
+                    Some(switch @ ("on" | "off")) => {
+                        settings.update = switch == "on";
+                        settings.save(&settings_path);
+                        println!("The update check at startup is {switch}.");
+                        ExitCode::SUCCESS
+                    }
+                    Some(_) => fail("'update' takes on, off or nothing"),
+                };
             }
             "-l" | "--level" => match args.next().as_deref().and_then(Level::parse) {
                 Some(level) => app.level = level,
@@ -95,25 +115,35 @@ fn main() -> ExitCode {
             _ => return fail(&format!("unknown argument '{arg}'")),
         }
     }
+    if command.as_deref() == Some("host")
+        && let Some(port) = &operand
+    {
+        match port.parse() {
+            Ok(port) if port > 0 => app.port = port,
+            _ => return fail("the port must be a number from 1 to 65535"),
+        }
+    }
     if command.as_deref() == Some("join") && operand.is_none() {
         return fail("join needs the host's address, as in 'funchess join 192.168.1.20'");
     }
     if !io::stdin().is_terminal() || !stdout().is_terminal() {
         return fail("this is an interactive game and needs a terminal");
     }
+    update::before_start(settings.update);
+
+    // Installed before ratatui's hook, which restores the terminal and then calls this one.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        // ratatui's hook does not know the mouse was captured.
+        let _ = execute!(stdout(), DisableMouseCapture);
+        default_hook(info)
+    }));
+
     match (command.as_deref(), operand) {
         (None, _) => {}
         (Some("computer"), _) => app.start_computer(),
         (Some("local"), _) => app.start_local(),
-        (Some("host"), port) => {
-            if let Some(port) = port {
-                match port.parse() {
-                    Ok(port) if port > 0 => app.port = port,
-                    _ => return fail("the port must be a number from 1 to 65535"),
-                }
-            }
-            app.start_host();
-        }
+        (Some("host"), _) => app.start_host(),
         (Some("join"), Some(address)) => {
             app.address = address;
             app.start_join();

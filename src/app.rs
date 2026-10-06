@@ -155,6 +155,8 @@ pub struct App {
     pub pieces: Pieces,
     /// Where the look and the level are remembered; `None` remembers nothing.
     pub settings_path: Option<std::path::PathBuf>,
+    /// The update switch, kept only so that saving the look does not lose it.
+    auto_update: bool,
 
     pub menu_item: usize,
     pub level: Level,
@@ -201,6 +203,7 @@ impl App {
             theme: settings.theme,
             pieces: settings.pieces,
             settings_path: None,
+            auto_update: settings.update,
             menu_item: 0,
             level: settings.level,
             side: Side::White,
@@ -248,7 +251,7 @@ impl App {
 
     fn remember(&self) {
         if let Some(path) = &self.settings_path {
-            Settings { theme: self.theme, pieces: self.pieces, level: self.level }.save(path);
+            Settings { theme: self.theme, pieces: self.pieces, level: self.level, update: self.auto_update }.save(path);
         }
     }
 
@@ -889,7 +892,7 @@ mod tests {
         app.start_local();
         type_keys(&mut app, "^t^p^p");
         assert_eq!((app.theme().name, app.pieces), (THEMES[2].name, Pieces::Letters));
-        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy });
+        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy, update: true });
         // Going round the end comes back to the start.
         for _ in 0..THEMES.len() - 2 {
             type_keys(&mut app, "^t");
