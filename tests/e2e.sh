@@ -161,9 +161,11 @@ else
     }
     keys() { T send-keys -t main "$@"; }
     # click <text> [session]: a left click (SGR mouse press and release) on the first
-    # character of the text, wherever it is on screen.
+    # character of the text, wherever it is on screen. Not every awk counts characters
+    # (the one on macOS counts bytes, and a chess symbol is three), so the bytes that
+    # continue a character are dropped first and everything is then counted as bytes.
     click() {
-        at=$(screen "${2:-main}" | awk -v t="$1" '{ i = index($0, t); if (i) { print i ";" NR; exit } }')
+        at=$(screen "${2:-main}" | LC_ALL=C tr -d '\200-\277' | LC_ALL=C awk -v t="$1" '{ i = index($0, t); if (i) { print i ";" NR; exit } }')
         [ -n "$at" ] || { fail "click: '$1' is not on screen"; return; }
         T send-keys -t "${2:-main}" -l "$(printf '\033[<0;%sM\033[<0;%sm' "$at" "$at")"
     }
