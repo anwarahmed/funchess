@@ -9,12 +9,88 @@ Chess for the terminal, on Linux and macOS.
 All the rules are in: castling, en passant, promotion, check, checkmate, stalemate,
 and draws by repetition, the fifty-move rule and too few pieces.
 
-## Build and run
+## Install
+
+funchess runs on macOS and Linux, on Intel and ARM. It is a single program with
+nothing else to install; the terminal needs UTF-8, which every current one has.
+
+### Homebrew (macOS and Linux)
+
+```sh
+brew install anwarahmed/tap/funchess
+```
+
+Update with `brew upgrade funchess`, remove with `brew uninstall funchess`.
+
+### Install script
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anwarahmed/funchess/main/install.sh | sh
+```
+
+This downloads the latest release for your machine, checks its checksum, and puts it
+in `~/.local/bin` (set `FUNCHESS_BIN_DIR` for somewhere else). A copy installed this
+way keeps itself up to date (see [Updates](#updates)). Where there is no prebuilt
+binary it builds from source instead, which needs Rust. To remove the game:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anwarahmed/funchess/main/install.sh | sh -s -- --uninstall
+```
+
+### Arch Linux
+
+Each [release](https://github.com/anwarahmed/funchess/releases/latest) carries a
+`PKGBUILD` for the package `funchess-bin`. Download it into an empty directory and
+build:
+
+```sh
+curl -fsSLO https://github.com/anwarahmed/funchess/releases/latest/download/PKGBUILD
+makepkg -si
+```
+
+Remove it with `sudo pacman -R funchess-bin`. (The package is not in the AUR yet.)
+
+### From source
 
 Needs Rust 1.88 or newer.
 
-    cargo build --release
-    ./target/release/funchess
+```sh
+git clone https://github.com/anwarahmed/funchess
+cd funchess
+cargo run --release
+```
+
+`./install.sh --source` builds and installs in one step; `./install.sh --link` links
+`~/.local/bin/funchess` to the checkout's build, for development.
+
+## Updates
+
+| Installed with | How it updates |
+| -------------- | -------------- |
+| Install script | By itself: when it starts it checks for a newer release, at most once a day, installs it and restarts |
+| Homebrew       | `brew upgrade funchess` |
+| Arch package   | Build the newer `PKGBUILD` the same way |
+| From source    | `git pull`, then build again |
+
+Only the install script's copy updates itself. A copy that Homebrew or pacman owns is
+marked as theirs when it is installed and never touches its own file, and neither does
+a build run from a checkout.
+
+For a copy that updates itself:
+
+```sh
+funchess update        # check now and install a newer release
+funchess update off    # stop checking at startup ("on" turns it back on)
+```
+
+`FUNCHESS_NO_UPDATE=1` skips the check for one run. The check at startup happens at
+most once a day (`funchess update` always checks), waits at most three seconds, and
+says nothing when you are offline. An update is verified against the release's
+SHA-256 checksum and never moves to an older version; if anything fails, the version
+you have starts as usual.
+
+Two players on two computers need versions that speak the same network messages; if
+they do not, the game says so when they connect, and both should update.
 
 ## Playing
 
@@ -63,7 +139,8 @@ the pieces:
 
 Change either with `Ctrl-T` and `Ctrl-P`, in the menu (which shows a sample) or during a
 game, or start with `--theme ocean --pieces outlined`. The choice is remembered in
-`~/.local/state/funchess/settings`, along with the computer's level.
+`~/.local/state/funchess/settings` (under `$XDG_STATE_HOME` when that is set), along
+with the computer's level.
 
 The board is as tall as the window allows. The players, the state of the game and
 the commands are to its right, and the moves to its left when the window is wide
@@ -86,6 +163,17 @@ of those. The host's firewall must allow the port.
 Each side checks the other's moves against the rules, and nothing but moves and
 resign/draw/rematch messages is exchanged.
 
-## Tests
+## Development
 
-    cargo test
+```sh
+cargo test                               # rules, the computer's play, the network, drawing
+cargo clippy --all-targets -- -D warnings
+cargo build --release && tests/e2e.sh    # the built program in tmux, install.sh, the updater
+```
+
+`CLAUDE.md` describes how the code is laid out and why; `RELEASING.md` how a release
+is made.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -98,20 +98,20 @@ pub struct Settings {
     pub theme: usize,
     pub pieces: Pieces,
     pub level: Level,
+    /// Whether to look for a newer release when the game starts.
+    pub update: bool,
 }
 
 impl Default for Settings {
     fn default() -> Settings {
-        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy }
+        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy, update: true }
     }
 }
 
 impl Settings {
-    /// `$XDG_STATE_HOME/funchess/settings`, or under `~/.local/state`.
-    pub fn path() -> Option<PathBuf> {
-        let set = |name| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
-        let state = set("XDG_STATE_HOME").or_else(|| set("HOME").map(|home| home.join(".local/state")))?;
-        Some(state.join("funchess/settings"))
+    /// `settings` in the state directory.
+    pub fn path() -> PathBuf {
+        crate::update::state_dir().join("settings")
     }
 
     /// Lines of `name=value`. Anything missing or not understood keeps its default.
@@ -122,6 +122,7 @@ impl Settings {
                 Some(("theme", v)) => settings.theme = find_theme(v).unwrap_or(settings.theme),
                 Some(("pieces", v)) => settings.pieces = Pieces::parse(v).unwrap_or(settings.pieces),
                 Some(("level", v)) => settings.level = Level::parse(v).unwrap_or(settings.level),
+                Some(("update", v)) => settings.update = v != "0",
                 _ => {}
             }
         }
@@ -129,7 +130,13 @@ impl Settings {
     }
 
     pub fn format(&self) -> String {
-        format!("theme={}\npieces={}\nlevel={}\n", THEMES[self.theme].name, self.pieces.name(), self.level.name().to_lowercase())
+        format!(
+            "theme={}\npieces={}\nlevel={}\nupdate={}\n",
+            THEMES[self.theme].name,
+            self.pieces.name(),
+            self.level.name().to_lowercase(),
+            u8::from(self.update)
+        )
     }
 
     pub fn load(path: &std::path::Path) -> Settings {
@@ -151,7 +158,7 @@ mod tests {
 
     #[test]
     fn settings_survive_a_round_trip_and_bad_input() {
-        let settings = Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard };
+        let settings = Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard, update: false };
         assert_eq!(Settings::parse(&settings.format()), settings);
         assert_eq!(Settings::parse("theme=nope\npieces\n=\nlevel=HARD\nextra=1"), Settings { level: Level::Hard, ..Settings::default() });
 
