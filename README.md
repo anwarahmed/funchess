@@ -2,6 +2,8 @@
 
 Chess for the terminal, on Linux and macOS.
 
+![funchess in a terminal: a game in progress, with a knight picked up and the squares it can reach marked](docs/screenshot.png)
+
 - **Against the computer**, at four levels (beginner, easy, medium, hard), as White or Black.
 - **Two players at one keyboard.** The board turns to face whoever is to move.
 - **Two players on two computers**, over a direct connection.
