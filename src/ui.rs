@@ -128,7 +128,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Line::styled("Enter connect    Esc back", dim()),
             ];
             let row = lines.len() as u16 - 1;
-            let (x, y) = centered(buf, area, "Join a game", lines);
+            let (x, y) = centered(buf, area, "Join a game", 2, lines);
             app.buttons.push((Rect::new(x, y + row, 13, 1), Click::Key(KeyCode::Enter, false)));
             app.buttons.push((Rect::new(x + 17, y + row, 8, 1), Click::Key(KeyCode::Esc, false)));
         }
@@ -137,7 +137,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 text.iter().map(|l| if l.starts_with("funchess ") { Line::styled(l.clone(), bold()) } else { Line::raw(l.clone()) }).collect();
             lines.extend([Line::raw(""), Line::styled("Esc cancel", dim())]);
             let row = lines.len() as u16 - 1;
-            let (x, y) = centered(buf, area, "Network game", lines);
+            let (x, y) = centered(buf, area, "Network game", 2, lines);
             app.buttons.push((Rect::new(x, y + row, 10, 1), Click::Key(KeyCode::Esc, false)));
         }
         Screen::Game => game(buf, area, app),
@@ -145,26 +145,32 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 }
 
 /// A titled block of lines in the middle of the screen. Returns where the first line starts.
-fn centered(buf: &mut Buffer, area: Rect, title: &str, lines: Vec<Line>) -> (u16, u16) {
+/// `head` is the rows the title takes: 2 with an empty row under it, 1 without, 0 for no title.
+fn centered(buf: &mut Buffer, area: Rect, title: &str, head: u16, lines: Vec<Line>) -> (u16, u16) {
     let width = lines.iter().map(Line::width).max().unwrap_or(0).max(title.len()) as u16;
-    let height = lines.len() as u16 + 2;
+    let height = lines.len() as u16 + head;
     let x = area.x + area.width.saturating_sub(width) / 2;
     let y = area.y + area.height.saturating_sub(height) / 2;
-    buf.set_stringn(x, y, title, area.width as usize, bold().fg(TermColor::Cyan));
+    if head > 0 {
+        buf.set_stringn(x, y, title, area.width as usize, bold().fg(TermColor::Cyan));
+    }
     for (i, line) in lines.iter().enumerate() {
-        let row = y + 2 + i as u16;
+        let row = y + head + i as u16;
         if row < area.bottom() {
             buf.set_line(x, row, line, area.width.saturating_sub(x - area.x));
         }
     }
-    (x, y + 2)
+    (x, y + head)
 }
 
 fn menu(buf: &mut Buffer, area: Rect, app: &mut App) {
+    // The nine choices always show. What a short window has rows left for is added in
+    // this order: the error line, the keys, the title, then the empty rows between them.
+    let spare = area.height.saturating_sub(MenuItem::ALL.len() as u16);
     let mut lines = Vec::new();
     let mut rows = Vec::new();
     for (i, item) in MenuItem::ALL.into_iter().enumerate() {
-        if matches!(item, MenuItem::Level | MenuItem::Quit) {
+        if spare >= 6 && matches!(item, MenuItem::Level | MenuItem::Quit) {
             lines.push(Line::raw(""));
         }
         let text = match item {
@@ -183,9 +189,16 @@ fn menu(buf: &mut Buffer, area: Rect, app: &mut App) {
         rows.push(lines.len() as u16);
         lines.push(Line::styled(format!("{} {text}", if chosen { ">" } else { " " }), style));
     }
-    lines.push(Line::raw(""));
-    lines.push(Line::styled(app.menu_error.clone(), Style::new().fg(TermColor::Red)));
-    lines.push(Line::styled("Up/Down choose   Enter start   Left/Right change", dim()));
+    if spare >= 7 {
+        lines.push(Line::raw(""));
+    }
+    if spare >= 1 {
+        lines.push(Line::styled(app.menu_error.clone(), Style::new().fg(TermColor::Red)));
+    }
+    if spare >= 2 {
+        let keys = "Up/Down choose   Enter start   Left/Right change";
+        lines.push(Line::styled(if area.width as usize >= keys.len() { keys } else { "↑↓ choose   Enter start   ←→ change" }, dim()));
+    }
     // A strip of pieces under the menu, to show the theme and the piece style.
     let (cell_w, cell_h) = (8, 4);
     let sample = [
@@ -202,7 +215,7 @@ fn menu(buf: &mut Buffer, area: Rect, app: &mut App) {
         lines.extend(std::iter::repeat_n(Line::raw(""), cell_h as usize + 1));
     }
     let width = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let (left, top) = centered(buf, area, "funchess   chess in the terminal", lines);
+    let (left, top) = centered(buf, area, "funchess   chess in the terminal", spare.saturating_sub(2).min(2), lines);
     for (i, row) in rows.into_iter().enumerate() {
         // The whole line chooses the item or steps a setting forward; its "<" steps back.
         app.buttons.push((Rect::new(left, top + row, width, 1), Click::Menu(i, true)));
@@ -727,13 +740,17 @@ mod tests {
         assert!(shown.contains("White to move") && shown.contains("^Q Menu"), "{shown}");
 
         keys(&mut app, "e2e4");
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
         let buf = render(&mut app, 80, 24);
         assert_eq!(symbol_on(&app, &buf, "e4"), "♟");
         assert!(text(&buf).contains("1. e4"));
-        // Flipped: Black's king is now on the bottom row of the board.
+        // Black is to move in a two-player game: Black's king is now on the bottom row.
         let g = app.geometry.unwrap();
         assert_eq!(cell_origin(&app, sq(4, 7)).1, g.y + 7 * g.cell_h);
+        // Flipped by hand, it is back at the top.
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        render(&mut app, 80, 24);
+        assert_eq!(cell_origin(&app, sq(4, 7)).1, app.geometry.unwrap().y);
+        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
         app.pieces = Pieces::Letters;
         let buf = render(&mut app, 80, 24);
@@ -789,6 +806,28 @@ mod tests {
             }
         }
         panic!("{needle:?} is not on screen:\n{}", text(buf));
+    }
+
+    /// A short window drops the empty rows, then the title and the keys, before any choice.
+    #[test]
+    fn the_menu_fits_a_small_window() {
+        let mut app = App::new(true, Settings::default());
+        app.menu_error = "Could not connect".into();
+        let shown = text(&render(&mut app, 39, 12));
+        for part in ["funchess", "1  Play the computer", "4  Join a game", "P  Pieces", "Q  Quit", "Could not connect", "Enter start   ←→ change"] {
+            assert!(shown.contains(part), "{part} is missing from\n{shown}");
+        }
+        // Every choice is still there, and can be clicked, in the shortest window a game fits in.
+        let buf = render(&mut app, 39, 9);
+        let shown = text(&buf);
+        assert!(shown.contains("1  Play the computer") && shown.contains("Q  Quit"), "{shown}");
+        let (x, y) = find(&buf, "Q  Quit");
+        click(&mut app, x, y);
+        assert!(app.quit);
+        // With room to spare nothing changes.
+        let mut app = App::new(true, Settings::default());
+        let shown = text(&render(&mut app, 80, 24));
+        assert!(shown.contains("Up/Down choose   Enter start   Left/Right change"), "{shown}");
     }
 
     #[test]
