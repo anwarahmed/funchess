@@ -47,6 +47,9 @@ has "an unknown level is refused" "--level needs one of" "$("$BIN" --level grand
 has "join needs an address" "join needs the host's address" "$("$BIN" join 2>&1)"
 has "a bad port is refused" "the port must be a number" "$("$BIN" host seventy </dev/null 2>&1)"
 has "needs a terminal" "needs a terminal" "$("$BIN" </dev/null 2>&1)"
+has "a bad animations switch is refused" "--animations needs on or off" "$("$BIN" --animations sometimes 2>&1)"
+XDG_STATE_HOME="$TMP/xdg-anim" "$BIN" --animations off </dev/null >/dev/null 2>&1
+is "--animations off is remembered" "animations=0" "$(grep -x 'animations=0' "$TMP/xdg-anim/funchess/settings" 2>/dev/null)"
 has "a checkout never updates itself" "running from a source checkout" "$("$BIN" update 2>&1)"
 
 # ------------------------------------------------- install and self-update ----
@@ -212,6 +215,8 @@ else
     expect "game: an accepted draw ends the game" "Draw agreed"
     keys C-n
     expect "game: Ctrl-N starts again" "White to move"
+    keys C-g
+    expect "game: Ctrl-G suggests a move" "Try the "
 
     # The same by mouse: squares, commands and answers.
     keys -l "$(printf '\033[<0;27;16M\033[<0;27;16m')" # e2, then e4
@@ -240,6 +245,8 @@ else
     expect "game: a tiny window says so" "Please make the window at least"
     T resize-window -t main -x 180 -y 50 2>/dev/null
     expect "game: a big window shows the moves on the left" "two players"
+    click "^G Hint"
+    expect "mouse: a clicked hint is given" "Try the "
     keys C-q
     expect "game: Ctrl-Q goes to the menu" "Play the computer"
     keys C-q
@@ -247,7 +254,7 @@ else
 
     # Against the computer: it answers, and undo takes back both moves.
     start main "$TMP/xdg2" "'$BIN'" computer --level beginner --pieces symbols
-    expect "computer: the game starts" "Computer (Beginner)"
+    expect "computer: the game starts" "Chick (Beginner)"
     keys -l e2e4
     expect "computer: the move is played" "1. e4"
     expect "computer: it replies" "White to move"

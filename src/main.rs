@@ -1,6 +1,7 @@
 mod app;
 mod chess;
 mod engine;
+mod fx;
 mod net;
 mod theme;
 mod ui;
@@ -40,8 +41,9 @@ Options:
   -p, --pieces STYLE          solid, outlined, shaded (pixel art, in a large enough
                               window), symbols, or letters if your font lacks
                               chess symbols
+  -a, --animations on|off     whether pieces slide, burst and fall (on by default)
 
-The theme, the piece style and the level are remembered for next time, in
+The theme, the piece style, the level and the animations are remembered for next time, in
 $XDG_STATE_HOME/funchess (~/.local/state/funchess).
 The color applies to `computer` and `host`; the joining player gets the other one.
 Network games use a direct connection on port 6464 unless another is given: both
@@ -50,8 +52,9 @@ computers must be on the same network, or the host must be reachable on that por
 In the game: click a piece and then a square, or move the marker with the arrow
 keys and press Enter, or type the two squares (e2 e4).
 Commands are Ctrl with a letter (shown as ^):
-  ^U undo     ^R resign    ^D offer a draw    ^N new game    ^F flip the board
-  ^T theme    ^P pieces    ^Q menu            ^C quit        ?  help
+  ^G hint     ^U undo      ^R resign          ^D offer a draw
+  ^N new game ^F flip the board               ^T theme       ^P pieces
+  ^Q menu     ^C quit      ?  help
 In the menu T, P and Q work without Ctrl.
 
 Environment:
@@ -111,6 +114,14 @@ fn main() -> ExitCode {
                 Some(pieces) => app.pieces = pieces,
                 None => return fail("--pieces needs one of: solid, outlined, shaded, symbols, letters"),
             },
+            "-a" | "--animations" => match args.next().as_deref() {
+                Some(switch @ ("on" | "off")) => {
+                    app.animations = switch == "on";
+                    settings.animations = app.animations;
+                    settings.save(&settings_path);
+                }
+                _ => return fail("--animations needs on or off"),
+            },
             "--ascii" => app.pieces = Pieces::Letters,
             "computer" | "local" | "host" | "join" if command.is_none() => command = Some(arg),
             _ if !arg.starts_with('-') && matches!(command.as_deref(), Some("host" | "join")) && operand.is_none() => operand = Some(arg),
@@ -161,6 +172,8 @@ fn main() -> ExitCode {
 /// How long the loop waits for a key before checking on the computer opponent and
 /// the network again.
 const POLL: Duration = Duration::from_millis(50);
+/// The same while a piece is moving, so that it moves smoothly.
+const FRAME: Duration = Duration::from_millis(16);
 
 fn run(app: &mut App) -> io::Result<()> {
     // Raw mode, the alternate screen, and a panic hook that undoes both.
@@ -180,7 +193,7 @@ fn run(app: &mut App) -> io::Result<()> {
         if app.quit {
             break Ok(());
         }
-        match event::poll(POLL) {
+        match event::poll(if app.animating() { FRAME } else { POLL }) {
             Ok(false) => {}
             Ok(true) => match event::read().inspect(|event| {
                 if let Some(log) = &mut log {

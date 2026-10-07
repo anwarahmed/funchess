@@ -117,6 +117,13 @@ pub const THEMES: [Theme; 12] = [
     },
 ];
 
+/// The frame around the two squares of a hint, the same in every theme so that it is
+/// never mistaken for the theme's own marks.
+pub const HINT: Rgb = (255, 105, 215);
+/// The sparks around a promoted pawn.
+pub const SPARK: Rgb = (255, 232, 110);
+pub const CONFETTI: [Rgb; 6] = [(255, 92, 92), (255, 196, 60), (110, 220, 110), (80, 190, 255), (200, 130, 255), (255, 255, 255)];
+
 pub fn find_theme(name: &str) -> Option<usize> {
     THEMES.iter().position(|t| t.name.eq_ignore_ascii_case(name))
 }
@@ -167,11 +174,13 @@ pub struct Settings {
     pub level: Level,
     /// Whether to look for a newer release when the game starts.
     pub update: bool,
+    /// Whether pieces slide, burst and fall, or simply appear where they went.
+    pub animations: bool,
 }
 
 impl Default for Settings {
     fn default() -> Settings {
-        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy, update: true }
+        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy, update: true, animations: true }
     }
 }
 
@@ -190,6 +199,7 @@ impl Settings {
                 Some(("pieces", v)) => settings.pieces = Pieces::parse(v).unwrap_or(settings.pieces),
                 Some(("level", v)) => settings.level = Level::parse(v).unwrap_or(settings.level),
                 Some(("update", v)) => settings.update = v != "0",
+                Some(("animations", v)) => settings.animations = v != "0",
                 _ => {}
             }
         }
@@ -198,11 +208,12 @@ impl Settings {
 
     pub fn format(&self) -> String {
         format!(
-            "theme={}\npieces={}\nlevel={}\nupdate={}\n",
+            "theme={}\npieces={}\nlevel={}\nupdate={}\nanimations={}\n",
             THEMES[self.theme].name,
             self.pieces.name(),
             self.level.name().to_lowercase(),
-            u8::from(self.update)
+            u8::from(self.update),
+            u8::from(self.animations)
         )
     }
 
@@ -225,7 +236,7 @@ mod tests {
 
     #[test]
     fn settings_survive_a_round_trip_and_bad_input() {
-        let settings = Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard, update: false };
+        let settings = Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard, update: false, animations: false };
         assert_eq!(Settings::parse(&settings.format()), settings);
         assert_eq!(Settings::parse("theme=nope\npieces\n=\nlevel=HARD\nextra=1"), Settings { level: Level::Hard, ..Settings::default() });
 

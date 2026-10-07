@@ -48,6 +48,17 @@ impl Kind {
         }
     }
 
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Pawn => "pawn",
+            Kind::Knight => "knight",
+            Kind::Bishop => "bishop",
+            Kind::Rook => "rook",
+            Kind::Queen => "queen",
+            Kind::King => "king",
+        }
+    }
+
     fn from_letter(c: char) -> Option<Kind> {
         Kind::ALL.into_iter().find(|k| k.letter() == c.to_ascii_uppercase())
     }
@@ -510,6 +521,14 @@ pub enum Outcome {
 }
 
 impl Outcome {
+    /// Who won, when somebody did.
+    pub fn winner(self) -> Option<Color> {
+        match self {
+            Outcome::Checkmate(c) | Outcome::Resigned(c) | Outcome::Abandoned(c) => Some(c),
+            _ => None,
+        }
+    }
+
     pub fn describe(self) -> String {
         match self {
             Outcome::Checkmate(c) => format!("Checkmate. {} wins", c.name()),

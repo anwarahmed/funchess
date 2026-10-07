@@ -7,6 +7,10 @@ Chess for the terminal, on Linux and macOS.
 - **Against the computer**, at four levels (beginner, easy, medium, hard), as White or Black.
 - **Two players at one keyboard.** The board turns to face whoever is to move.
 - **Two players on two computers**, over a direct connection.
+- **Made to be fun, for children most of all.** Pieces slide to their squares and the
+  knight jumps, a captured piece bursts, a king in check shakes and a mated one falls
+  over. The computer has a face that shows how it feels, a win gets confetti and
+  stars, and `Ctrl-G` shows a good move when you are stuck.
 
 All the rules are in: castling, en passant, promotion, check, checkmate, stalemate,
 and draws by repetition, the fifty-move rule and too few pieces.
@@ -111,6 +115,7 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 
 | Key | |
 |---|---|
+| `Ctrl-G` | a hint: the two squares of a good move are framed (not in a network game) |
 | `Ctrl-U` | take back a move (not in a network game) |
 | `Ctrl-R` | resign |
 | `Ctrl-D` | offer a draw |
@@ -124,7 +129,18 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 
 When a game ends a box says who won and why, with the score, the number of moves, the
 material and what you can do next: a new game, take the last move back, the menu, or
-Enter to look at the final position.
+Enter to look at the final position. Beating the computer earns up to three stars: one
+for the win, one for doing it without a hint or a take-back, and one for doing it in 40
+moves or fewer.
+
+The computer is a different character at each level: a chick (beginner), a cat (easy),
+a robot (medium) and a dragon (hard). In a window large enough for pixel art its face is
+beside the board, looking pleased, surprised or thoughtful and saying so, and the
+pieces each player has captured are lined up on a tray.
+
+Pieces are shown moving. A key or a click never waits for that: it ends whatever is
+still moving and acts at once. `funchess --animations off` switches the movement off
+(`on` brings it back), and that is remembered.
 
 Everything can also be clicked: the lines of the main menu (a setting steps
 forward, or back from its `<`), the commands beside the board, and
@@ -146,7 +162,7 @@ candy, sunset, neon, tropical, citrus and aurora. Five ways of drawing the piece
 Change either with `T` and `P` in the menu (which shows a sample), with `Ctrl-T` and
 `Ctrl-P` during a game, or start with `--theme ocean --pieces outlined`. The choice is remembered in
 `~/.local/state/funchess/settings` (under `$XDG_STATE_HOME` when that is set), along
-with the computer's level.
+with the computer's level and whether pieces are shown moving.
 
 The board is as tall as the window allows. The players, the state of the game and
 the commands are to its right, and the moves to its left when the window is wide
