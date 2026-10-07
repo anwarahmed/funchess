@@ -571,7 +571,8 @@ impl App {
 
     pub fn on_key(&mut self, key: KeyEvent) {
         // Every command is Ctrl with a letter, so that no plain key ever does anything
-        // but move the marker, name a square or answer a question.
+        // but move the marker, name a square or answer a question. Only the menu, where
+        // nothing is typed, also takes its commands as plain letters.
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             if let KeyCode::Char(c) = key.code {
                 self.command(c.to_ascii_lowercase());
@@ -644,7 +645,10 @@ impl App {
             KeyCode::Left => self.menu_change(item, false),
             KeyCode::Right => self.menu_change(item, true),
             KeyCode::Enter | KeyCode::Char(' ') => self.menu_activate(item),
-            KeyCode::Esc => self.quit = true,
+            KeyCode::Esc | KeyCode::Char('q' | 'Q') => self.quit = true,
+            // Nothing is typed in the menu, so its commands need no Ctrl here.
+            KeyCode::Char('t' | 'T') => self.change_theme(true),
+            KeyCode::Char('p' | 'P') => self.change_pieces(true),
             KeyCode::Char(c @ '1'..='4') => {
                 self.menu_item = c as usize - '1' as usize;
                 self.menu_activate(MenuItem::ALL[self.menu_item]);
@@ -913,12 +917,24 @@ mod tests {
         type_keys(&mut app, "qurntpxijklmosvwyz=QURN");
         assert!(matches!(app.screen, Screen::Game) && app.prompt.is_none() && !app.quit && !app.flipped);
         assert_eq!((app.theme, app.pieces, app.game.history.len()), (theme, pieces, 1));
-        // In the menu too.
+        // Nor while an address is being typed.
         type_keys(&mut app, "^qy");
-        assert!(matches!(app.screen, Screen::Menu));
+        app.screen = Screen::Join;
+        app.address.clear();
         type_keys(&mut app, "qtp");
-        assert!(!app.quit && (app.theme, app.pieces) == (theme, pieces));
-        type_keys(&mut app, "^q");
+        assert!(!app.quit && (app.theme, app.pieces) == (theme, pieces) && app.address == "qtp");
+    }
+
+    /// Nothing is typed in the menu, so there the commands work without Ctrl as well.
+    #[test]
+    fn the_menu_takes_its_commands_as_plain_letters() {
+        let mut app = App::new(true, Settings::default());
+        let (theme, pieces) = (app.theme, app.pieces);
+        type_keys(&mut app, "tpT");
+        assert!(app.theme == (theme + 2) % THEMES.len() && app.pieces != pieces && !app.quit);
+        type_keys(&mut app, "^t");
+        assert_eq!(app.theme, (theme + 3) % THEMES.len());
+        type_keys(&mut app, "q");
         assert!(app.quit);
     }
 

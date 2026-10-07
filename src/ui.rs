@@ -174,9 +174,9 @@ fn menu(buf: &mut Buffer, area: Rect, app: &mut App) {
             MenuItem::Join => "4  Join a game on another computer".to_string(),
             MenuItem::Level => format!("   Computer level   < {} >", app.level.name()),
             MenuItem::Side => format!("   Your color       < {} >", app.side.name()),
-            MenuItem::Theme => format!("^T Theme            < {} >", app.theme().name),
-            MenuItem::Pieces => format!("^P Pieces           < {} >", app.pieces.name()),
-            MenuItem::Quit => "^Q Quit".to_string(),
+            MenuItem::Theme => format!("T  Theme            < {} >", app.theme().name),
+            MenuItem::Pieces => format!("P  Pieces           < {} >", app.pieces.name()),
+            MenuItem::Quit => "Q  Quit".to_string(),
         };
         let chosen = i == app.menu_item;
         let style = if chosen { bold().fg(TermColor::Cyan) } else { Style::new() };
@@ -186,7 +186,6 @@ fn menu(buf: &mut Buffer, area: Rect, app: &mut App) {
     lines.push(Line::raw(""));
     lines.push(Line::styled(app.menu_error.clone(), Style::new().fg(TermColor::Red)));
     lines.push(Line::styled("Up/Down choose   Enter start   Left/Right change", dim()));
-    lines.push(Line::styled("^ means the Ctrl key", dim()));
     // A strip of pieces under the menu, to show the theme and the piece style.
     let (cell_w, cell_h) = (8, 4);
     let sample = [

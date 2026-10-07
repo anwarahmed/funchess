@@ -84,8 +84,11 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   published ones and are never to be edited to fit.
 - **Every command is Ctrl + a letter** (`App::command`). Plain letters only name
   squares (`a`-`h`, `1`-`8`) or answer a question box. The user asked for this after
-  `q` (menu) clashed with typing; do not add plain-letter commands. Ctrl-B is avoided
-  because it is tmux's prefix, and Ctrl-H/I/M are Backspace/Tab/Enter to a terminal.
+  `q` (menu) clashed with typing; do not add plain-letter commands. The main menu is
+  the exception, also at the user's request: nothing is typed there, so `T`, `P` and
+  `Q` work alone (`App::menu_key`) and are shown without the `^`. Ctrl still works.
+  Ctrl-B is avoided because it is tmux's prefix, and Ctrl-H/I/M are Backspace/Tab/Enter
+  to a terminal.
 - **Everything clickable is in `App::buttons`**, rebuilt by `ui::draw` every frame as
   `(Rect, Click)`. A `Click::Key` button does exactly what its key does, by calling
   `on_key`, so mouse and keyboard cannot drift apart. Board squares are the one
