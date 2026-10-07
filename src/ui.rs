@@ -873,7 +873,7 @@ fn moves(buf: &mut Buffer, area: Rect, app: &App) {
 }
 
 /// Every command, with its key. Each is drawn as a button that can be clicked.
-const COMMANDS: [(&str, &str, char, bool); 11] = [
+const COMMANDS: [(&str, &str, char, bool); 12] = [
     ("?", "Help", '?', false),
     ("^G", "Hint", 'g', true),
     ("^U", "Undo", 'u', true),
@@ -884,6 +884,7 @@ const COMMANDS: [(&str, &str, char, bool); 11] = [
     ("^T", "Theme", 't', true),
     ("^P", "Pieces", 'p', true),
     ("^S", "Sound", 's', true),
+    ("^A", "Animations", 'a', true),
     ("^Q", "Menu", 'q', true),
 ];
 
@@ -1033,6 +1034,7 @@ fn popup(buf: &mut Buffer, area: Rect, app: &mut App, prompt: Prompt) {
                 "  Ctrl-T  next color theme",
                 "  Ctrl-P  next way of drawing the pieces",
                 "  Ctrl-S  sound on or off",
+                "  Ctrl-A  animations on or off",
                 "  Ctrl-Q  back to the menu",
                 "  Ctrl-C  quit at once",
                 "",
@@ -1474,7 +1476,7 @@ mod tests {
 
         // Every command fits somewhere, and the help closes on a click.
         render(&mut app, 132, 52);
-        assert_eq!(app.buttons.len(), 11);
+        assert_eq!(app.buttons.len(), 12);
         let buf = render(&mut app, 60, 12);
         assert!(text(&buf).contains("^D Offer draw"));
         click(&mut app, find(&buf, "?  Help").0, find(&buf, "?  Help").1);
@@ -1708,7 +1710,7 @@ mod tests {
         assert!(text(&render(&mut app, 80, 24)).contains("You win!  * * *"));
     }
 
-    /// Eleven commands and both players, in the smallest window a game fits in.
+    /// Twelve commands and both players, in the smallest window a game fits in.
     #[test]
     fn the_smallest_window_holds_every_command() {
         let mut app = still();
@@ -1725,5 +1727,9 @@ mod tests {
         assert!(!app.sound);
         // What a command says is shown in place of the state of the game.
         assert!(text(&render(&mut app, 58, 9)).contains("Sound off"));
+        let (x, y) = find(&buf, "^A Animations");
+        click(&mut app, x, y);
+        assert!(app.animations);
+        assert!(text(&render(&mut app, 58, 9)).contains("Animations on"));
     }
 }

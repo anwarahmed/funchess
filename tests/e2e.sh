@@ -221,6 +221,11 @@ else
     expect "game: Ctrl-N starts again" "White to move"
     keys C-g
     expect "game: Ctrl-G suggests a move" "Try the "
+    keys C-a
+    expect "game: Ctrl-A switches the animations off" "Animations off"
+    is "game: animations off is remembered" "animations=0" "$(grep -x 'animations=0' "$TMP/xdg/funchess/settings" 2>/dev/null)"
+    click "^A Animations"
+    expect "mouse: a click switches the animations on again" "Animations on"
 
     # The same by mouse: squares, commands and answers.
     keys -l "$(printf '\033[<0;27;16M\033[<0;27;16m')" # e2, then e4
