@@ -184,9 +184,8 @@ else
     keys C-t
     expect "menu: Ctrl-T changes the theme" "< wood >"
     is "menu: the theme is remembered" "theme=wood" "$(grep -x 'theme=wood' "$TMP/xdg/funchess/settings" 2>/dev/null)"
-    keys -l qtp
-    sleep 0.2
-    expect "menu: plain letters are not commands" "< wood >"
+    keys -l t
+    expect "menu: T alone changes the theme too" "< ocean >"
     keys 2
     expect "game: two players starts" "White to move"
     keys -l e2e4

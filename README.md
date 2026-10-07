@@ -104,8 +104,8 @@ Move a piece by picking it and then picking where it goes: click with the mouse,
 or move the marker with the arrow keys and press Enter, or type the two squares
 (`e2` `e4`).
 
-Commands are Ctrl with a letter, so no plain letter ever does anything but name a
-square or answer a question.
+In a game, commands are Ctrl with a letter, so no plain letter ever does anything but
+name a square or answer a question. In the menu the letter alone is enough: `T`, `P`, `Q`.
 
 | Key | |
 |---|---|
@@ -137,8 +137,8 @@ the pieces:
 | `symbols` | the font's own chess symbols |
 | `letters` | K Q R B N P, for fonts without chess symbols |
 
-Change either with `Ctrl-T` and `Ctrl-P`, in the menu (which shows a sample) or during a
-game, or start with `--theme ocean --pieces outlined`. The choice is remembered in
+Change either with `T` and `P` in the menu (which shows a sample), with `Ctrl-T` and
+`Ctrl-P` during a game, or start with `--theme ocean --pieces outlined`. The choice is remembered in
 `~/.local/state/funchess/settings` (under `$XDG_STATE_HOME` when that is set), along
 with the computer's level.
 
