@@ -152,10 +152,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   not the greeting ends the connection with a reason. Raise the number in `HELLO`
   whenever the messages change incompatibly.
 - **Settings** are one file, `settings`, in the state directory; `App::remember`
-  rewrites it whenever the theme, the piece style or the level changes. Whether pieces
-  are shown moving and whether there is sound are in it too, set only by
-  `--animations on|off` and `--sound on|off`: the menu has no room for a tenth line
-  and the panel none for an eleventh command (see below). Tests set
+  rewrites it whenever the theme, the piece style, the level or the sound switch
+  changes. Whether pieces are shown moving is in it too, set only by
+  `--animations on|off`: the menu has no room for a tenth line and the panel none for
+  a twelfth command (see below). Tests set
   `settings_path` to a temporary file or leave it `None`; nothing in the tests may
   touch the user's real file.
 
@@ -176,9 +176,18 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   take-back costs the second star (`App::stars`), which is the only price.
 - **Stars and confetti are only for wins at this keyboard.** Losing to the computer
   gets neither, and the computer's face is pleased rather than gloating.
-- **Ten commands is all the panel holds**: in the shortest window (8 rows of board)
-  they take five rows in two columns between the two players' lines. Ctrl-G took the
-  tenth place. An eleventh needs a new layout first.
+- **Twelve commands is all the panel holds**, and there are eleven. In the shortest
+  window (8 rows of board) they take six rows in two columns, and the two players and
+  the state of the game three more, so there the panel also uses the row of the file
+  letters under the board (`panel_h` in `ui::game`), which every window has. Ctrl-G
+  took the tenth place and Ctrl-S the eleventh. A thirteenth needs a new layout first.
+- **Ctrl-S switches sound off and on in a game** (0.2.2), at the user's request in October
+  2026, after `--sound off` alone proved not to be enough. It says which
+  (`App::toggle_sound`), plays a move when switched on so that it is known at once
+  whether anything can be heard, and is remembered. The `Speaker` is found at startup
+  even when sound is off, so that there is something to switch on; `App::play` is the
+  only caller of `Speaker::play` and asks nothing while `App::sound` is off. It is a
+  command of the game only: the menu has no line for it.
 - **Sound is played by the system's own player, not by an audio library**, added (0.2.1) at
   the user's request in October 2026. The release binaries for Linux are static
   (musl), and an audio library there means linking ALSA, which a static binary cannot
@@ -270,7 +279,7 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - The sounds were never heard by whoever made them: they were checked as numbers
   (length, loudness, a valid WAV file that `pw-play` accepts), on Linux only. Whether
   they sound good, and whether `afplay` on a Mac plays them, is for the user to say.
-- No way to switch sound or animations off from inside the game, and no volume.
+- No way to switch animations off from inside the game, and no volume for the sound.
 - Other ideas for fun that were offered and not built: stickers for firsts (first
   castle, first mate, beating each level) kept in the state directory, a warning before
   leaving the queen to be taken, piece sets other than chessmen, mini-games (a pawn

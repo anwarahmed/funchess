@@ -197,8 +197,7 @@ impl Speaker {
         Speaker::silent()
     }
 
-    /// Whether anything will be heard.
-    #[cfg(test)]
+    /// Whether there is anything to play a sound with.
     pub fn is_on(&self) -> bool {
         self.player.is_some()
     }
