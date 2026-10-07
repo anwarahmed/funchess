@@ -168,8 +168,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 
 ## Known gaps and ideas
 
-- Never run on a real Mac, nor between two physically separate computers; CI runs the
-  tests on macOS and the network tests on one machine.
+- Run on a real Mac by the user, in Ghostty (October 2026): it works well there. No
+  other macOS terminal has been tried.
+- Never run between two physically separate computers; CI runs the network tests on
+  one machine.
 - The AUR package `funchess-bin` is rendered for each release but not pushed: the user
   has no AUR account.
 - No README screenshot yet.
