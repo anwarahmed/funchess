@@ -125,6 +125,7 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 | `Ctrl-T` | next color theme |
 | `Ctrl-P` | next way of drawing the pieces |
 | `Ctrl-S` | sound on or off |
+| `Ctrl-A` | animations on or off |
 | `Ctrl-Q` or `Esc` | back to the menu |
 | `Ctrl-C` | quit at once |
 | `?` | help |
@@ -141,8 +142,9 @@ beside the board, looking pleased, surprised or thoughtful and saying so, and th
 pieces each player has captured are lined up on a tray.
 
 Pieces are shown moving. A key or a click never waits for that: it ends whatever is
-still moving and acts at once. `funchess --animations off` switches the movement off
-(`on` brings it back), and that is remembered.
+still moving and acts at once. `Ctrl-A` in a game switches the movement off and on
+again, and so does starting with `--animations off` or `--animations on`; either way
+it is remembered.
 
 There are sounds for a move, a capture, castling, check, promotion, a hint, and for
 winning, losing and drawing. They are played by a program your system already has:

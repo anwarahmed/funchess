@@ -56,7 +56,8 @@ keys and press Enter, or type the two squares (e2 e4).
 Commands are Ctrl with a letter (shown as ^):
   ^G hint     ^U undo      ^R resign          ^D offer a draw
   ^N new game ^F flip the board               ^T theme       ^P pieces
-  ^S sound on or off       ^Q menu            ^C quit        ?  help
+  ^S sound on or off       ^A animations on or off
+  ^Q menu     ^C quit      ?  help
 In the menu T, P and Q work without Ctrl.
 
 Environment:

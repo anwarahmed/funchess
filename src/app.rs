@@ -504,6 +504,17 @@ impl App {
         }
     }
 
+    /// Switches the showing of moves on or off, for this game and the next ones, and
+    /// says which. The key that asked has already ended whatever was moving.
+    fn toggle_animations(&mut self) {
+        self.animations = !self.animations;
+        self.remember();
+        if !self.animations {
+            self.party = None;
+        }
+        self.message = if self.animations { "Animations on" } else { "Animations off" }.into();
+    }
+
     /// Switches sound on or off, for this game and the next ones, and says which. On,
     /// a move is heard, so that it can be told at once whether anything will be.
     fn toggle_sound(&mut self) {
@@ -867,6 +878,7 @@ impl App {
             'd' => self.offer_draw(),
             'f' => self.flipped = !self.flipped,
             's' => self.toggle_sound(),
+            'a' => self.toggle_animations(),
             'n' => {
                 if self.over() || self.game.history.is_empty() {
                     self.new_game();
@@ -1665,6 +1677,42 @@ mod tests {
         assert!(app.sound && app.prompt == Some(Prompt::Resign));
         type_keys(&mut app, "n^q^s");
         assert!(app.sound && matches!(app.screen, Screen::Menu));
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn animations_are_switched_off_and_on_in_the_game_and_remembered() {
+        let path = std::env::temp_dir().join(format!("funchess-animations-key-test-{}/settings", std::process::id()));
+        let mut app = App::new(true, Settings::default());
+        app.settings_path = Some(path.clone());
+        app.start_local();
+        type_keys(&mut app, "e2e4");
+        assert!(app.fx.is_some());
+        // The key ends what is moving, and after it nothing moves.
+        type_keys(&mut app, "^a");
+        assert_eq!((app.animations, app.fx.is_none(), app.message.as_str()), (false, true, "Animations off"));
+        assert!(!Settings::load(&path).animations);
+        type_keys(&mut app, "e7e5");
+        assert!(app.fx.is_none() && !app.animating() && sans(&app) == ["e4", "e5"]);
+        type_keys(&mut app, "^a");
+        assert_eq!((app.animations, app.message.as_str()), (true, "Animations on"));
+        assert!(Settings::load(&path).animations);
+        type_keys(&mut app, "g1f3");
+        assert!(app.fx.is_some());
+        // Switched off while the confetti falls, the confetti stops.
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        type_keys(&mut app, "f2f3e7e5g2g4d8h4");
+        key(&mut app, KeyCode::Enter);
+        assert!(app.party.is_some());
+        type_keys(&mut app, "^a");
+        assert!(app.party.is_none() && !app.animating() && app.over());
+        // It is a command of the game: in the menu, and while a question is open, it waits.
+        let mut app = local();
+        type_keys(&mut app, "e2e4^r^a");
+        assert!(!app.animations && app.prompt == Some(Prompt::Resign));
+        type_keys(&mut app, "n^qy^a");
+        assert!(!app.animations && matches!(app.screen, Screen::Menu));
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

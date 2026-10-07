@@ -152,10 +152,9 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   not the greeting ends the connection with a reason. Raise the number in `HELLO`
   whenever the messages change incompatibly.
 - **Settings** are one file, `settings`, in the state directory; `App::remember`
-  rewrites it whenever the theme, the piece style, the level or the sound switch
-  changes. Whether pieces are shown moving is in it too, set only by
-  `--animations on|off`: the menu has no room for a tenth line and the panel none for
-  a twelfth command (see below). Tests set
+  rewrites it whenever the theme, the piece style, the level, the sound switch or the
+  animations switch changes. The last two have no line in the menu, which has no room
+  for a tenth; they are commands of the game, and options. Tests set
   `settings_path` to a temporary file or leave it `None`; nothing in the tests may
   touch the user's real file.
 
@@ -176,11 +175,17 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   take-back costs the second star (`App::stars`), which is the only price.
 - **Stars and confetti are only for wins at this keyboard.** Losing to the computer
   gets neither, and the computer's face is pleased rather than gloating.
-- **Twelve commands is all the panel holds**, and there are eleven. In the shortest
+- **Twelve commands is all the panel holds**, and there are twelve. In the shortest
   window (8 rows of board) they take six rows in two columns, and the two players and
   the state of the game three more, so there the panel also uses the row of the file
   letters under the board (`panel_h` in `ui::game`), which every window has. Ctrl-G
-  took the tenth place and Ctrl-S the eleventh. A thirteenth needs a new layout first.
+  took the tenth place, Ctrl-S the eleventh and Ctrl-A the last. A thirteenth needs a
+  new layout first.
+- **Ctrl-A switches the animations off and on in a game** (0.2.3), at the user's request in
+  October 2026, the same way as Ctrl-S for sound: it says which
+  (`App::toggle_animations`) and is remembered. Off, the confetti stops too. Ctrl-A is
+  the prefix of GNU screen and of many people's tmux; the user's tmux uses Ctrl-Space
+  and Ctrl-B, and `--animations on|off` remains for whoever cannot type it.
 - **Ctrl-S switches sound off and on in a game** (0.2.2), at the user's request in October
   2026, after `--sound off` alone proved not to be enough. It says which
   (`App::toggle_sound`), plays a move when switched on so that it is known at once
@@ -279,7 +284,7 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - The sounds were never heard by whoever made them: they were checked as numbers
   (length, loudness, a valid WAV file that `pw-play` accepts), on Linux only. Whether
   they sound good, and whether `afplay` on a Mac plays them, is for the user to say.
-- No way to switch animations off from inside the game, and no volume for the sound.
+- No volume for the sound.
 - Other ideas for fun that were offered and not built: stickers for firsts (first
   castle, first mate, beating each level) kept in the state directory, a warning before
   leaving the queen to be taken, piece sets other than chessmen, mini-games (a pawn
