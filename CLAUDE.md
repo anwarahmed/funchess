@@ -9,7 +9,7 @@ file is for whoever changes the code.
 
 ```sh
 cargo run --release                          # play (from a checkout it never updates itself)
-cargo test                                   # unit tests: rules (perft), engine, network, app, drawing, animation, settings, update
+cargo test                                   # unit tests: rules (perft), engine, network, app, drawing, animation, sound, settings, update
 cargo clippy --all-targets -- -D warnings    # CI fails on any warning
 cargo fmt                                    # rustfmt.toml: max_width 160
 cargo build --release && tests/e2e.sh        # the built program in tmux, install.sh, the updater
@@ -66,6 +66,7 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 | `net.rs`    | Two computers: `host`/`join` give a `Pending`, which becomes a `Link`; one text line per message |
 | `app.rs`    | `App` state; every key, click, engine reply and network message, and what each does |
 | `fx.rs`     | What moves: `MoveFx` (the last move being shown) and the particles, as times and places only |
+| `sound.rs`  | The sounds, made out of notes, and `Speaker`, which hands them as WAV files to the system's player |
 | `ui.rs`     | All drawing, the layout, and the list of clickable rectangles (`App::buttons`) |
 | `theme.rs`  | Color themes, piece styles, and `Settings` (the `key=value` file that remembers them) |
 | `update.rs` | Self-update, and `state_dir()` |
@@ -133,6 +134,15 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - **The loop draws 60 times a second only while something moves** (`App::animating`,
   `FRAME` in `main.rs`), 20 times while something pulses or counts dots (a hint, the
   computer thinking), and otherwise only when something happens.
+- **A sound belongs to something seen, and is heard when that is seen.** `App::moved`
+  picks one sound for a move (promotion, else check, else capture, else castling, else
+  a plain move) and queues it in `App::cues` for when the piece lands; `App::celebrate`
+  queues the result's for when the box appears. `App::tick` plays what is due and
+  `App::settle` plays what was waiting, so cutting an animation short never loses a
+  sound or plays it twice. In tests the `Speaker` is silent and lists what it was
+  asked for (`Speaker::heard`); nothing in the tests may make a noise, and the
+  scripts set `FUNCHESS_NO_SOUND=1` (`tests/e2e.sh` checks sound with stand-in players
+  that only note their arguments).
 - **Colors are RGB in `theme.rs`** and go through `ui::paint`, which sends the nearest
   of 256 colors when the terminal does not announce truecolor (`COLORTERM`).
 - **Display uses text characters only.** No terminal image protocols: the user's
@@ -143,8 +153,9 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   whenever the messages change incompatibly.
 - **Settings** are one file, `settings`, in the state directory; `App::remember`
   rewrites it whenever the theme, the piece style or the level changes. Whether pieces
-  are shown moving is in it too, set only by `--animations on|off`: the menu has no
-  room for a tenth line and the panel none for an eleventh command (see below). Tests set
+  are shown moving and whether there is sound are in it too, set only by
+  `--animations on|off` and `--sound on|off`: the menu has no room for a tenth line
+  and the panel none for an eleventh command (see below). Tests set
   `settings_path` to a temporary file or leave it `None`; nothing in the tests may
   touch the user's real file.
 
@@ -168,6 +179,15 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - **Ten commands is all the panel holds**: in the shortest window (8 rows of board)
   they take five rows in two columns between the two players' lines. Ctrl-G took the
   tenth place. An eleventh needs a new layout first.
+- **Sound is played by the system's own player, not by an audio library**, added (0.2.1) at
+  the user's request in October 2026. The release binaries for Linux are static
+  (musl), and an audio library there means linking ALSA, which a static binary cannot
+  load; it would also be the first thing a user has to install. So every sound is
+  synthesized from a few notes (`Sound::notes`, no asset files), written once as a WAV
+  file under `sounds/` in the state directory, and given to the first of `pw-play`,
+  `paplay`, `aplay -q` found on `PATH` (`afplay` on macOS). One short process per
+  sound, reaped on the next one (`Speaker::playing`); no thread. No player, no sound,
+  and nothing is said about it. Losing sounds soft and falling, never mocking.
 - **Faces and trays are pixel art, so they need the window pixel art needs** (a board
   of 32 rows or more). Smaller windows keep the character's name and the captured
   pieces as symbols. A tray is not drawn while it is empty.
@@ -247,7 +267,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - The AUR package `funchess-bin` is rendered for each release but not pushed: the user
   has no AUR account.
 - No clocks, no saved or resumable games, no PGN export, no way to set up a position.
-- No sound: a terminal can only ring its bell, and anything more needs an audio library.
+- The sounds were never heard by whoever made them: they were checked as numbers
+  (length, loudness, a valid WAV file that `pw-play` accepts), on Linux only. Whether
+  they sound good, and whether `afplay` on a Mac plays them, is for the user to say.
+- No way to switch sound or animations off from inside the game, and no volume.
 - Other ideas for fun that were offered and not built: stickers for firsts (first
   castle, first mate, beating each level) kept in the state directory, a warning before
   leaving the queen to be taken, piece sets other than chessmen, mini-games (a pawn

@@ -7,8 +7,9 @@
 #   2. install.sh and the self-updater, against releases made up here and served
 #      from file:// (needs curl)
 #   3. the game itself in detached tmux sessions (skipped when tmux is missing):
-#      by keyboard, by mouse, against the computer, and two copies playing each
-#      other over a real connection on this machine
+#      by keyboard, by mouse, against the computer, with sound (played by stand-ins
+#      that only note what they were given), and two copies playing each other over
+#      a real connection on this machine
 #
 # The rules, the computer's play, the layout and the drawing are covered by
 # `cargo test`; this is for what only shows when the real program meets a real
@@ -50,6 +51,9 @@ has "needs a terminal" "needs a terminal" "$("$BIN" </dev/null 2>&1)"
 has "a bad animations switch is refused" "--animations needs on or off" "$("$BIN" --animations sometimes 2>&1)"
 XDG_STATE_HOME="$TMP/xdg-anim" "$BIN" --animations off </dev/null >/dev/null 2>&1
 is "--animations off is remembered" "animations=0" "$(grep -x 'animations=0' "$TMP/xdg-anim/funchess/settings" 2>/dev/null)"
+has "a bad sound switch is refused" "--sound needs on or off" "$("$BIN" --sound loud 2>&1)"
+XDG_STATE_HOME="$TMP/xdg-anim" "$BIN" --sound off </dev/null >/dev/null 2>&1
+is "--sound off is remembered" "sound=0" "$(grep -x 'sound=0' "$TMP/xdg-anim/funchess/settings" 2>/dev/null)"
 has "a checkout never updates itself" "running from a source checkout" "$("$BIN" update 2>&1)"
 
 # ------------------------------------------------- install and self-update ----
@@ -178,7 +182,7 @@ else
         shift 2
         T kill-session -t "$name" 2>/dev/null
         T -f /dev/null new-session -d -s "$name" -x 80 -y 24 \
-            "env XDG_STATE_HOME='$state' FUNCHESS_NO_UPDATE=1 $*; echo \"EXIT=\$?\"; sleep 20"
+            "env XDG_STATE_HOME='$state' FUNCHESS_NO_UPDATE=1 FUNCHESS_NO_SOUND=1 $*; echo \"EXIT=\$?\"; sleep 20"
     }
 
     # The menu, a two-player game by keyboard, and the commands.
@@ -270,6 +274,32 @@ else
     expect "computer: Black is at the bottom" "h    g    f    e    d    c    b    a"
     keys C-c
 
+    # Sound: the system's player is asked to play a file for a new game and for a move.
+    # Stand-ins for every player it might look for, which note what they were given.
+    mkdir -p "$TMP/players"
+    for player in pw-play paplay aplay afplay; do
+        printf '#!/bin/sh\nfor a in "$@"; do echo "$a"; done >> "%s"\n' "$TMP/played" > "$TMP/players/$player"
+        chmod 755 "$TMP/players/$player"
+    done
+    start main "$TMP/xdg5" env -u FUNCHESS_NO_SOUND "PATH='$TMP/players:$PATH'" "'$BIN'" local --pieces symbols
+    expect "sound: the game starts" "White to move"
+    keys -l e2e4
+    expect "sound: the move is played" "1. e4"
+    sleep 0.6
+    has "sound: a new game is heard" "$TMP/xdg5/funchess/sounds/start.wav" "$(cat "$TMP/played" 2>/dev/null)"
+    has "sound: a move is heard" "$TMP/xdg5/funchess/sounds/move.wav" "$(cat "$TMP/played" 2>/dev/null)"
+    is "sound: what is played is a WAV file" "RIFF" "$(head -c 4 "$TMP/xdg5/funchess/sounds/move.wav" 2>/dev/null)"
+    keys C-c
+    expect "sound: quits cleanly" "EXIT=0"
+    rm -f "$TMP/played"
+    start main "$TMP/xdg5" env -u FUNCHESS_NO_SOUND "PATH='$TMP/players:$PATH'" "'$BIN'" local --pieces symbols --sound off
+    expect "sound off: the game starts" "White to move"
+    keys -l e2e4
+    expect "sound off: the move is played" "1. e4"
+    sleep 0.6
+    if [ -e "$TMP/played" ]; then fail "sound off: something was played"; else pass "sound off: nothing is played"; fi
+    keys C-c
+
     # Two copies over a real connection.
     PORT=$((20000 + $$ % 20000))
     start host "$TMP/xdg3" "'$BIN'" host "$PORT" --black --pieces symbols
@@ -314,7 +344,7 @@ else
         launch() { # <release directory>
             T kill-session -t main 2>/dev/null
             T -f /dev/null new-session -d -s main -x 80 -y 24 \
-                "env XDG_STATE_HOME='$TMP/ustate' FUNCHESS_RELEASE_URL='file://$1' '$INST'; echo \"EXIT=\$?\"; sleep 20"
+                "env XDG_STATE_HOME='$TMP/ustate' FUNCHESS_NO_SOUND=1 FUNCHESS_RELEASE_URL='file://$1' '$INST'; echo \"EXIT=\$?\"; sleep 20"
         }
         fresh_copy
         rm -f "$STAMP"

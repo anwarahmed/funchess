@@ -3,6 +3,7 @@ mod chess;
 mod engine;
 mod fx;
 mod net;
+mod sound;
 mod theme;
 mod ui;
 mod update;
@@ -42,9 +43,10 @@ Options:
                               window), symbols, or letters if your font lacks
                               chess symbols
   -a, --animations on|off     whether pieces slide, burst and fall (on by default)
+  -s, --sound on|off          whether moves, captures and wins are heard (on by default)
 
-The theme, the piece style, the level and the animations are remembered for next time, in
-$XDG_STATE_HOME/funchess (~/.local/state/funchess).
+The theme, the piece style, the level, the animations and the sound are remembered
+for next time, in $XDG_STATE_HOME/funchess (~/.local/state/funchess).
 The color applies to `computer` and `host`; the joining player gets the other one.
 Network games use a direct connection on port 6464 unless another is given: both
 computers must be on the same network, or the host must be reachable on that port.
@@ -59,6 +61,7 @@ In the menu T, P and Q work without Ctrl.
 
 Environment:
   FUNCHESS_NO_UPDATE          set to skip the update check for one run
+  FUNCHESS_NO_SOUND           set to play no sound for one run
   FUNCHESS_LOG                a file to record every key and mouse event in
 ";
 
@@ -122,6 +125,14 @@ fn main() -> ExitCode {
                 }
                 _ => return fail("--animations needs on or off"),
             },
+            "-s" | "--sound" => match args.next().as_deref() {
+                Some(switch @ ("on" | "off")) => {
+                    app.sound = switch == "on";
+                    settings.sound = app.sound;
+                    settings.save(&settings_path);
+                }
+                _ => return fail("--sound needs on or off"),
+            },
             "--ascii" => app.pieces = Pieces::Letters,
             "computer" | "local" | "host" | "join" if command.is_none() => command = Some(arg),
             _ if !arg.starts_with('-') && matches!(command.as_deref(), Some("host" | "join")) && operand.is_none() => operand = Some(arg),
@@ -143,6 +154,9 @@ fn main() -> ExitCode {
         return fail("this is an interactive game and needs a terminal");
     }
     update::before_start(settings.update);
+    if app.sound && std::env::var_os("FUNCHESS_NO_SOUND").is_none() {
+        app.speaker = sound::Speaker::find(update::state_dir().join("sounds"));
+    }
 
     // Installed before ratatui's hook, which restores the terminal and then calls this one.
     let default_hook = std::panic::take_hook();

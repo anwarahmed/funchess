@@ -87,6 +87,11 @@ impl MoveFx {
         self.start + self.length()
     }
 
+    /// When the piece arrives.
+    pub fn lands(&self) -> Duration {
+        self.start + self.slide()
+    }
+
     /// How long ago the piece arrived; nothing while it is on its way.
     fn landed(&self, clock: Duration) -> Option<Duration> {
         clock.checked_sub(self.start + self.slide())
