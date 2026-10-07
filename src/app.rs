@@ -10,14 +10,20 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
-use crate::chess::{Color, Game, Kind, Move, Outcome, Square, file_of, rank_of, sq};
+use crate::chess::{Color, Game, Kind, Move, Outcome, Square, file_of, rank_of, sq, square_name};
 use crate::engine::{self, Level};
+use crate::fx::{self, MoveFx};
 use crate::net::{self, Incoming, Link, Message, Pending};
 use crate::theme::{Pieces, Settings, THEMES, Theme};
 
 /// The computer's move is held back this long, so that it does not land the instant
 /// the player lets go of their own piece.
 const MIN_THINK: Duration = Duration::from_millis(450);
+/// A hint comes from the computer playing at this level, whatever level the game is at:
+/// strong enough to be worth following, and quick.
+const HINT_LEVEL: Level = Level::Medium;
+/// A win in this many moves or fewer earns the third star.
+pub const QUICK_WIN: usize = 40;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Opponent {
@@ -160,6 +166,16 @@ pub struct App {
     pub settings_path: Option<std::path::PathBuf>,
     /// The update switch, kept only so that saving the look does not lose it.
     auto_update: bool,
+    /// Whether pieces are shown moving. Off, everything is where it belongs at once.
+    pub animations: bool,
+    /// The time everything that moves on screen goes by. It follows the real time
+    /// (`advance`), and a test moves it by hand.
+    pub clock: Duration,
+    advanced: Instant,
+    /// The last move, while it is being shown.
+    pub fx: Option<MoveFx>,
+    /// When the confetti for a win began, or will.
+    pub party: Option<Duration>,
 
     pub menu_item: usize,
     pub level: Level,
@@ -190,6 +206,12 @@ pub struct App {
     pub prompt: Option<Prompt>,
     pub message: String,
     thinking: Option<Thinking>,
+    /// The move suggested to the player, its two squares marked until a move is made.
+    pub hint: Option<Move>,
+    hinting: Option<Thinking>,
+    /// How often the player asked for a hint or took a move back in this game, which
+    /// costs the second star.
+    helped: u32,
     draw_offer_sent: bool,
     rematch_wanted: bool,
     rematch_offered: bool,
@@ -207,6 +229,11 @@ impl App {
             pieces: settings.pieces,
             settings_path: None,
             auto_update: settings.update,
+            animations: settings.animations,
+            clock: Duration::ZERO,
+            advanced: Instant::now(),
+            fx: None,
+            party: None,
             menu_item: 0,
             level: settings.level,
             side: Side::White,
@@ -227,6 +254,9 @@ impl App {
             prompt: None,
             message: String::new(),
             thinking: None,
+            hint: None,
+            hinting: None,
+            helped: 0,
             draw_offer_sent: false,
             rematch_wanted: false,
             rematch_offered: false,
@@ -254,7 +284,7 @@ impl App {
 
     fn remember(&self) {
         if let Some(path) = &self.settings_path {
-            Settings { theme: self.theme, pieces: self.pieces, level: self.level, update: self.auto_update }.save(path);
+            Settings { theme: self.theme, pieces: self.pieces, level: self.level, update: self.auto_update, animations: self.animations }.save(path);
         }
     }
 
@@ -262,6 +292,9 @@ impl App {
 
     fn start(&mut self, opponent: Opponent, me: Color) {
         self.thinking = None;
+        self.fx = None;
+        self.party = None;
+        self.helped = 0;
         self.game = Game::new();
         self.opponent = opponent;
         self.me = me;
@@ -325,6 +358,9 @@ impl App {
 
     fn back_to_menu(&mut self, error: String) {
         self.thinking = None;
+        self.hinting = None;
+        self.fx = None;
+        self.party = None;
         self.pending = None;
         self.link = None;
         self.prompt = None;
@@ -344,9 +380,15 @@ impl App {
     }
 
     /// The color at the bottom of the board. Two players at one keyboard take turns
-    /// sitting there, so the board turns to face whoever is to move.
+    /// sitting there, so the board turns to face whoever is to move, once the move
+    /// before has been shown.
     pub fn bottom(&self) -> Color {
-        let near = if self.opponent == Opponent::Local { self.game.board.turn } else { self.me };
+        let turn = self.game.board.turn;
+        let near = match self.opponent {
+            Opponent::Local if self.fx.is_some() => turn.other(),
+            Opponent::Local => turn,
+            _ => self.me,
+        };
         if self.flipped { near.other() } else { near }
     }
 
@@ -357,6 +399,18 @@ impl App {
 
     pub fn is_thinking(&self) -> bool {
         self.thinking.is_some()
+    }
+
+    /// Whether something on screen is moving quickly enough to want drawing often.
+    pub fn animating(&self) -> bool {
+        self.fx.is_some() || self.party.is_some()
+    }
+
+    /// The stars for beating the computer: for the win, for doing it without a hint
+    /// or a take-back, and for doing it in `QUICK_WIN` moves or fewer.
+    pub fn stars(&self) -> Option<[bool; 3]> {
+        let won = matches!(self.opponent, Opponent::Computer(_)) && self.game.outcome.and_then(Outcome::winner) == Some(self.me);
+        won.then(|| [true, self.helped == 0, self.game.history.len().div_ceil(2) <= QUICK_WIN])
     }
 
     pub fn targets(&self) -> Vec<Square> {
@@ -399,7 +453,34 @@ impl App {
         if let Some(link) = &mut self.link {
             link.send(Message::Move(m));
         }
+        self.moved();
+    }
+
+    /// After a move was played, by anybody: it is shown, and then the housekeeping.
+    fn moved(&mut self) {
+        self.fx = match self.game.history.last() {
+            Some(last) if self.animations => {
+                let mate = matches!(self.game.outcome, Some(Outcome::Checkmate(_)));
+                MoveFx::new(self.clock, &last.before, last.mv, &self.game.board, mate)
+            }
+            _ => None,
+        };
         self.after_move();
+    }
+
+    /// Stops showing the last move: everything is where it ends up. True when there
+    /// was something still moving.
+    fn settle(&mut self) -> bool {
+        self.party = self.party.map(|start| start.min(self.clock));
+        self.fx.take().is_some()
+    }
+
+    /// Confetti, when the game was won by somebody at this keyboard.
+    fn celebrate(&mut self) {
+        let winner = self.game.outcome.and_then(Outcome::winner);
+        let here = winner.is_some_and(|c| self.opponent == Opponent::Local || c == self.me);
+        // It waits for the last move to be shown.
+        self.party = (here && self.animations).then(|| self.fx.as_ref().map_or(self.clock, MoveFx::end));
     }
 
     /// Housekeeping after any move, whoever made it.
@@ -410,6 +491,9 @@ impl App {
         if matches!(self.prompt, Some(Prompt::Promotion { .. } | Prompt::DrawOffered)) {
             self.prompt = None;
         }
+        self.hint = None;
+        self.hinting = None;
+        self.party = None;
         self.thinking = None;
         if let Opponent::Computer(level) = self.opponent
             && !self.over()
@@ -425,7 +509,35 @@ impl App {
         }
         if self.over() {
             self.prompt = Some(Prompt::GameOver);
+            self.celebrate();
         }
+    }
+
+    /// Asks the computer what it would play here, for the player to see.
+    fn ask_hint(&mut self) {
+        if self.opponent == Opponent::Remote {
+            self.message = "No hints in a network game".into();
+        } else if !self.my_turn() {
+            self.message = "Wait for your turn".into();
+        } else if let Some(m) = self.hint {
+            self.show_hint(m);
+        } else if self.hinting.is_none() {
+            let (board, keys, stop) = (self.game.board, self.game.keys(), Arc::new(AtomicBool::new(false)));
+            let (tx, rx) = mpsc::channel();
+            let stopped = stop.clone();
+            thread::spawn(move || {
+                let _ = tx.send(engine::best_move(&board, &keys, HINT_LEVEL, &stopped, seed()));
+            });
+            self.hinting = Some(Thinking { rx, stop, since: Instant::now() });
+            self.helped += 1;
+            self.message = "Thinking of a hint...".into();
+        }
+    }
+
+    fn show_hint(&mut self, m: Move) {
+        self.hint = Some(m);
+        let kind = self.game.board.at(m.from).map_or("piece", |p| p.kind.name());
+        self.message = format!("Try the {kind} from {} to {}", square_name(m.from), square_name(m.to));
     }
 
     fn undo(&mut self) {
@@ -434,6 +546,7 @@ impl App {
             return;
         }
         self.message.clear();
+        self.fx = None;
         // A resignation or an agreed draw is itself the last thing that happened.
         if matches!(self.game.outcome, Some(Outcome::Resigned(_) | Outcome::DrawAgreed)) {
             self.game.outcome = None;
@@ -452,6 +565,7 @@ impl App {
         while self.game.history.len() > keep {
             self.game.undo();
         }
+        self.helped += 1;
         self.after_move();
     }
 
@@ -466,10 +580,14 @@ impl App {
     fn end(&mut self, outcome: Outcome) {
         self.game.outcome = Some(outcome);
         self.thinking = None;
+        self.hint = None;
+        self.hinting = None;
+        self.fx = None;
         self.selected = None;
         // The result box repeats the message, so one left from earlier must not linger.
         self.message.clear();
         self.prompt = Some(Prompt::GameOver);
+        self.celebrate();
     }
 
     fn offer_draw(&mut self) {
@@ -516,17 +634,41 @@ impl App {
 
     // ---- things that happen without a key being pressed ----
 
+    /// Brings the clock up to the real time.
+    fn advance(&mut self) {
+        let now = Instant::now();
+        self.clock += now - self.advanced;
+        self.advanced = now;
+    }
+
     /// Called before every frame. True when something changed.
     pub fn tick(&mut self) -> bool {
-        let mut changed = false;
+        self.advance();
+        // Whatever moves, pulses or counts dots needs drawing again, and stops by itself.
+        let mut changed = self.animating() || self.hint.is_some() || self.thinking.is_some() || self.hinting.is_some();
+        if self.fx.as_ref().is_some_and(|fx| self.clock >= fx.end()) {
+            self.fx = None;
+        }
+        if self.party.is_some_and(|start| self.clock >= start + fx::CONFETTI) {
+            self.party = None;
+        }
         if let Some(thinking) = &self.thinking
             && thinking.since.elapsed() >= MIN_THINK
             && let Ok(reply) = thinking.rx.try_recv()
         {
             self.thinking = None;
-            if let Some(m) = reply {
-                self.game.play(m);
-                self.after_move();
+            if let Some(m) = reply
+                && self.game.play(m)
+            {
+                self.moved();
+            }
+            changed = true;
+        }
+        if let Some(reply) = self.hinting.as_ref().and_then(|hinting| hinting.rx.try_recv().ok()) {
+            self.hinting = None;
+            match reply {
+                Some(m) => self.show_hint(m),
+                None => self.message.clear(),
             }
             changed = true;
         }
@@ -566,7 +708,7 @@ impl App {
             }
             Incoming::Message(Message::Move(m)) => {
                 if !self.over() && self.game.board.turn != self.me && self.game.play(m) {
-                    self.after_move();
+                    self.moved();
                     self.message.clear();
                 } else if !self.over() {
                     self.link = None;
@@ -590,10 +732,18 @@ impl App {
     // ---- keys ----
 
     pub fn on_key(&mut self, key: KeyEvent) {
+        self.advance();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        // A key ends whatever was still moving and then does what it always does. The
+        // result box is the exception: it only appears once the last move has been
+        // shown, and a key pressed before that must not answer a box nobody has seen.
+        if self.settle() && self.prompt == Some(Prompt::GameOver) && !ctrl {
+            return;
+        }
         // Every command is Ctrl with a letter, so that no plain key ever does anything
         // but move the marker, name a square or answer a question. Only the menu, where
         // nothing is typed, also takes its commands as plain letters.
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
+        if ctrl {
             if let KeyCode::Char(c) = key.code {
                 self.command(c.to_ascii_lowercase());
             }
@@ -633,7 +783,8 @@ impl App {
             _ if !in_game || self.prompt.is_some_and(|p| p != Prompt::GameOver) => {}
             _ if self.prompt.take().is_some() => self.command(letter),
             'u' => self.undo(),
-            'r' | 'd' if self.over() => self.message = "The game is over".into(),
+            'r' | 'd' | 'g' if self.over() => self.message = "The game is over".into(),
+            'g' => self.ask_hint(),
             'r' => self.prompt = Some(Prompt::Resign),
             'd' => self.offer_draw(),
             'f' => self.flipped = !self.flipped,
@@ -797,6 +948,12 @@ impl App {
             MouseEventKind::Up(MouseButton::Left) => return,
             _ => return,
         }
+        self.advance();
+        // As with a key, a click ends whatever was still moving, and then counts. A
+        // click on a square does not when that makes the board turn round to the other
+        // player: the square under it is no longer the one that was aimed at.
+        let (facing, moving) = (self.bottom(), self.settle());
+        let turned = moving && facing != self.bottom();
         let at = Position::new(mouse.column, mouse.row);
         match self.buttons.iter().rev().find(|(rect, _)| rect.contains(at)).map(|&(_, click)| click) {
             Some(Click::Key(code, ctrl)) => self.on_key(KeyEvent::new(code, if ctrl { KeyModifiers::CONTROL } else { KeyModifiers::NONE })),
@@ -807,7 +964,7 @@ impl App {
                     item => self.menu_activate(item),
                 }
             }
-            None if matches!(self.screen, Screen::Game) && self.prompt.is_none() => {
+            None if matches!(self.screen, Screen::Game) && self.prompt.is_none() && !turned => {
                 if let Some(square) = self.square_at(mouse.column, mouse.row) {
                     self.choose(square);
                 }
@@ -849,8 +1006,9 @@ mod tests {
         }
     }
 
+    /// A two-player game in which nothing takes time to be shown.
     fn local() -> App {
-        let mut app = App::new(true, Settings::default());
+        let mut app = App::new(true, Settings { animations: false, ..Settings::default() });
         app.start_local();
         app
     }
@@ -953,7 +1111,7 @@ mod tests {
         app.start_local();
         type_keys(&mut app, "^t^p^p");
         assert_eq!((app.theme().name, app.pieces), (THEMES[2].name, Pieces::Letters));
-        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy, update: true });
+        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy, update: true, animations: true });
         // Going round the end comes back to the start.
         for _ in 0..THEMES.len() - 2 {
             type_keys(&mut app, "^t");
@@ -1178,5 +1336,156 @@ mod tests {
         drop(guest);
         settle(&mut host, &mut App::new(true, Settings::default()), &|a, _| a.over());
         assert_eq!(host.game.outcome, Some(Outcome::Abandoned(Color::White)));
+    }
+
+    /// Lets everything that is moving finish.
+    fn let_it_finish(app: &mut App) {
+        app.clock += Duration::from_secs(10);
+        app.tick();
+    }
+
+    #[test]
+    fn a_move_is_shown_and_a_key_or_a_click_cuts_it_short() {
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        app.geometry = Some(Geometry { x: 10, y: 5, cell_w: 8, cell_h: 4 });
+        let click = |app: &mut App, col: u16, row: u16| click_at(app, 10 + col * 8 + 3, 5 + row * 4 + 1);
+        type_keys(&mut app, "e2e4");
+        // Played at once, and shown for a while: the board waits before it turns.
+        assert!(app.fx.is_some() && app.animating() && sans(&app) == ["e4"]);
+        assert_eq!(app.bottom(), Color::White);
+        assert!(app.tick(), "there is something to draw");
+        let_it_finish(&mut app);
+        assert!(app.fx.is_none() && !app.animating() && app.bottom() == Color::Black);
+        assert!(!app.tick());
+
+        // A key ends it and then acts: the marker moves on the board as it now faces.
+        type_keys(&mut app, "e7e5");
+        assert!(app.fx.is_some() && app.bottom() == Color::Black);
+        key(&mut app, KeyCode::Up);
+        assert!(app.fx.is_none() && app.bottom() == Color::White);
+        assert_eq!(app.cursor, sq(4, 5));
+
+        // A click that lands while the board is about to turn is dropped, since the
+        // square under it is about to be another one. The next one counts.
+        type_keys(&mut app, "g1f3");
+        click(&mut app, 4, 6);
+        assert!(app.fx.is_none() && app.selected.is_none());
+        click(&mut app, 4, 6);
+        assert_eq!(app.selected, Some(sq(3, 6)));
+        // A button is where it was, so a click on one always counts.
+        type_keys(&mut app, "d7d5");
+        app.buttons = vec![(Rect::new(0, 0, 5, 1), Click::Key(KeyCode::Char('f'), true))];
+        click_at(&mut app, 1, 0);
+        assert!(app.fx.is_none() && app.flipped);
+        app.buttons.clear();
+
+        // Against the computer the board stays, so a click during its move counts.
+        let mut app = App::new(true, Settings::default());
+        app.level = Level::Beginner;
+        app.start_computer();
+        app.geometry = Some(Geometry { x: 10, y: 5, cell_w: 8, cell_h: 4 });
+        type_keys(&mut app, "e2e4");
+        wait_for_reply(&mut app);
+        assert!(app.fx.is_some());
+        click(&mut app, 3, 6);
+        assert_eq!((app.fx.is_none(), app.selected), (true, Some(sq(3, 1))));
+
+        // Switched off, nothing is ever on its way.
+        let mut app = local();
+        type_keys(&mut app, "e2e4");
+        assert!(app.fx.is_none() && !app.animating() && !app.tick());
+        type_keys(&mut app, "f7f6d2d4g7g5d1h5");
+        assert!(app.over() && app.party.is_none());
+    }
+
+    #[test]
+    fn the_result_is_not_answered_before_it_is_seen() {
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        type_keys(&mut app, "f2f3e7e5g2g4d8h4");
+        assert!(app.over() && app.fx.is_some() && app.prompt == Some(Prompt::GameOver));
+        // Enter while the queen is still on her way shows the box instead of closing it.
+        key(&mut app, KeyCode::Enter);
+        assert!(app.fx.is_none() && app.prompt == Some(Prompt::GameOver));
+        // Somebody at this keyboard won, so there is confetti, for a while.
+        assert!(app.party.is_some() && app.animating());
+        let_it_finish(&mut app);
+        assert!(app.party.is_none() && !app.animating());
+        key(&mut app, KeyCode::Enter);
+        assert!(app.prompt.is_none());
+        // A command is never dropped: here the mate is taken back while it is shown.
+        type_keys(&mut app, "^ud8h4^u");
+        assert!(!app.over() && app.fx.is_none() && app.party.is_none() && app.prompt.is_none());
+        // No confetti for losing to the computer, nor for a draw.
+        let mut app = App::new(true, Settings::default());
+        app.start_computer();
+        type_keys(&mut app, "^ry");
+        assert!(app.over() && app.party.is_none());
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        type_keys(&mut app, "e2e4^dy");
+        assert!(app.over() && app.party.is_none());
+    }
+
+    #[test]
+    fn a_hint_is_a_legal_move_and_costs_a_star() {
+        let wait_for_hint = |app: &mut App| {
+            let started = Instant::now();
+            while app.hint.is_none() {
+                app.tick();
+                assert!(started.elapsed() < Duration::from_secs(20), "no hint came");
+                thread::sleep(Duration::from_millis(10));
+            }
+        };
+        let mut app = local();
+        type_keys(&mut app, "^g");
+        assert_eq!(app.message, "Thinking of a hint...");
+        wait_for_hint(&mut app);
+        let hint = app.hint.unwrap();
+        assert!(app.game.board.legal_moves().contains(&hint));
+        assert!(app.message.starts_with("Try the ") && app.message.contains(&square_name(hint.to)), "{}", app.message);
+        // Picking a piece clears the words and keeps the squares; asking again says it again.
+        type_keys(&mut app, "a2^g");
+        assert!(app.message.starts_with("Try the ") && app.hint == Some(hint));
+        // A move ends it.
+        type_keys(&mut app, "a3");
+        assert!(app.hint.is_none() && sans(&app) == ["a3"]);
+        // There is nothing to suggest once the game is over, or to the player waiting,
+        // and no help in a network game.
+        type_keys(&mut app, "^ry^g");
+        assert_eq!(app.message, "The game is over");
+        let mut app = local();
+        app.opponent = Opponent::Remote;
+        type_keys(&mut app, "^g");
+        assert_eq!(app.message, "No hints in a network game");
+        app.opponent = Opponent::Computer(Level::Beginner);
+        app.me = Color::Black;
+        type_keys(&mut app, "^g");
+        assert_eq!(app.message, "Wait for your turn");
+
+        // Mate in one against the computer: three stars, or two after asking how.
+        let mate_in_one = |ask: bool| {
+            let mut app = App::new(true, Settings { animations: false, ..Settings::default() });
+            app.start_computer();
+            app.game.board = crate::chess::Board::from_fen("6k1/5ppp/8/8/8/8/8/R3K3 w - - 0 1").unwrap();
+            assert_eq!(app.stars(), None);
+            if ask {
+                type_keys(&mut app, "^g");
+                wait_for_hint(&mut app);
+                assert_eq!(app.hint.map(Move::uci).as_deref(), Some("a1a8"));
+            }
+            type_keys(&mut app, "a1a8");
+            assert_eq!(app.game.outcome, Some(Outcome::Checkmate(Color::White)));
+            app
+        };
+        assert_eq!(mate_in_one(false).stars(), Some([true, true, true]));
+        assert_eq!(mate_in_one(true).stars(), Some([true, false, true]));
+        // Winning because the computer has no say is not possible; losing earns none.
+        let mut app = App::new(true, Settings::default());
+        app.start_computer();
+        type_keys(&mut app, "^ry");
+        assert_eq!(app.stars(), None);
+        assert_eq!(local().stars(), None);
     }
 }

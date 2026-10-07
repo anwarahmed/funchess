@@ -9,7 +9,7 @@ file is for whoever changes the code.
 
 ```sh
 cargo run --release                          # play (from a checkout it never updates itself)
-cargo test                                   # unit tests: rules (perft), engine, network, app, drawing, settings, update
+cargo test                                   # unit tests: rules (perft), engine, network, app, drawing, animation, settings, update
 cargo clippy --all-targets -- -D warnings    # CI fails on any warning
 cargo fmt                                    # rustfmt.toml: max_width 160
 cargo build --release && tests/e2e.sh        # the built program in tmux, install.sh, the updater
@@ -65,6 +65,7 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 | `engine.rs` | The computer: alpha-beta with quiescence over material + piece-square tables; `Level` |
 | `net.rs`    | Two computers: `host`/`join` give a `Pending`, which becomes a `Link`; one text line per message |
 | `app.rs`    | `App` state; every key, click, engine reply and network message, and what each does |
+| `fx.rs`     | What moves: `MoveFx` (the last move being shown) and the particles, as times and places only |
 | `ui.rs`     | All drawing, the layout, and the list of clickable rectangles (`App::buttons`) |
 | `theme.rs`  | Color themes, piece styles, and `Settings` (the `key=value` file that remembers them) |
 | `update.rs` | Self-update, and `state_dir()` |
@@ -112,6 +113,26 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   size or whole multiple that fits is centered. Rims and shading are worked out from
   the shape (`Cell::pixels`), not drawn into the art. Below 4 rows a square holds a
   chess symbol or a letter.
+- **Animation is only ever a way of showing a position that is already final.** A move
+  is played at once (`Game::play`); `App::moved` then keeps a `MoveFx` until it has
+  been shown. `ui::game` draws the squares as they were while the piece is on its way
+  (`Stage` draws it between them, over the squares) and everything that follows the
+  landing: the burst, the shaking king, the fall, the sparks. Nothing in the rules,
+  the engine or the network waits for it, and with `App::animations` off none of it
+  exists. Everything is a function of `App::clock`, which follows real time
+  (`App::advance`) and which a test moves by hand; the particles are worked out from
+  the clock and a fixed `fx::noise`, never stored. Tests that are not about animation
+  switch it off (`local()` in `app.rs`, `still()` in `ui.rs`), since a move that is
+  still being shown is drawn where it started.
+- **Input never waits for an animation.** A key or a click ends it (`App::settle`) and
+  then does what it always does. Two exceptions, both because what was aimed at is no
+  longer there: the result box only appears when the last move has been shown, so a
+  plain key before that shows the box instead of answering it; and with two players
+  at one keyboard the board turns when the move has been shown, so a click on a
+  square that makes it turn is dropped. Buttons stay put, so a click on one counts.
+- **The loop draws 60 times a second only while something moves** (`App::animating`,
+  `FRAME` in `main.rs`), 20 times while something pulses or counts dots (a hint, the
+  computer thinking), and otherwise only when something happens.
 - **Colors are RGB in `theme.rs`** and go through `ui::paint`, which sends the nearest
   of 256 colors when the terminal does not announce truecolor (`COLORTERM`).
 - **Display uses text characters only.** No terminal image protocols: the user's
@@ -121,11 +142,35 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   not the greeting ends the connection with a reason. Raise the number in `HELLO`
   whenever the messages change incompatibly.
 - **Settings** are one file, `settings`, in the state directory; `App::remember`
-  rewrites it whenever the theme, the piece style or the level changes. Tests set
+  rewrites it whenever the theme, the piece style or the level changes. Whether pieces
+  are shown moving is in it too, set only by `--animations on|off`: the menu has no
+  room for a tenth line and the panel none for an eleventh command (see below). Tests set
   `settings_path` to a temporary file or leave it `None`; nothing in the tests may
   touch the user's real file.
 
 ## Decisions and why
+
+- **It is called funchess and is mainly for children**, the user said in October 2026 (0.2.0),
+  and asked for it to be fun to play. What that brought: pieces that move, confetti
+  and stars for a win, a hint key, trays of captured pieces, and a face for the
+  computer. Judge new ideas by whether a child would enjoy them, and keep the words
+  on screen short and friendly.
+- **The computer is a character at each level** (`ui::FACES`: Chick, Cat, Robot,
+  Dragon), with a face in five moods. `ui::mood` works the mood and the words out from
+  the position and the last move alone, so nothing has to be remembered or undone. It
+  never praises a move it has not judged, and it is gracious when it loses.
+- **A hint is the computer's own move at `HINT_LEVEL`** (medium: quick, and strong
+  enough to follow), whatever level the game is at. It frames two squares and names
+  the piece; it does not play the move. No hints in a network game. A hint or a
+  take-back costs the second star (`App::stars`), which is the only price.
+- **Stars and confetti are only for wins at this keyboard.** Losing to the computer
+  gets neither, and the computer's face is pleased rather than gloating.
+- **Ten commands is all the panel holds**: in the shortest window (8 rows of board)
+  they take five rows in two columns between the two players' lines. Ctrl-G took the
+  tenth place. An eleventh needs a new layout first.
+- **Faces and trays are pixel art, so they need the window pixel art needs** (a board
+  of 32 rows or more). Smaller windows keep the character's name and the captured
+  pieces as symbols. A tray is not drawn while it is empty.
 
 - **Built-in engine, no Stockfish.** The user chose a self-contained game over a
   stronger opponent that needs a separate install. It is a plain alpha-beta without a
@@ -202,6 +247,14 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - The AUR package `funchess-bin` is rendered for each release but not pushed: the user
   has no AUR account.
 - No clocks, no saved or resumable games, no PGN export, no way to set up a position.
+- No sound: a terminal can only ring its bell, and anything more needs an audio library.
+- Other ideas for fun that were offered and not built: stickers for firsts (first
+  castle, first mate, beating each level) kept in the state directory, a warning before
+  leaving the queen to be taken, piece sets other than chessmen, mini-games (a pawn
+  race, mate-in-one puzzles), and a tour of how each piece moves.
+- The animations were only ever watched as captured frames turned into pictures, not
+  in a live terminal: how smooth they are in foot, in Ghostty and under tmux is for
+  the user to say.
 - The engine has no opening book, transposition table or draw-offer judgement.
 - The 8-pixel art is rough; the rook and queen are less distinct than at larger sizes.
 - Squares grow in whole rows, so some window heights leave rows unused above and
