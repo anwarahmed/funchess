@@ -176,11 +176,12 @@ pub struct Settings {
     pub update: bool,
     /// Whether pieces slide, burst and fall, or simply appear where they went.
     pub animations: bool,
+    pub sound: bool,
 }
 
 impl Default for Settings {
     fn default() -> Settings {
-        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy, update: true, animations: true }
+        Settings { theme: 0, pieces: Pieces::Shaded, level: Level::Easy, update: true, animations: true, sound: true }
     }
 }
 
@@ -200,6 +201,7 @@ impl Settings {
                 Some(("level", v)) => settings.level = Level::parse(v).unwrap_or(settings.level),
                 Some(("update", v)) => settings.update = v != "0",
                 Some(("animations", v)) => settings.animations = v != "0",
+                Some(("sound", v)) => settings.sound = v != "0",
                 _ => {}
             }
         }
@@ -208,12 +210,13 @@ impl Settings {
 
     pub fn format(&self) -> String {
         format!(
-            "theme={}\npieces={}\nlevel={}\nupdate={}\nanimations={}\n",
+            "theme={}\npieces={}\nlevel={}\nupdate={}\nanimations={}\nsound={}\n",
             THEMES[self.theme].name,
             self.pieces.name(),
             self.level.name().to_lowercase(),
             u8::from(self.update),
-            u8::from(self.animations)
+            u8::from(self.animations),
+            u8::from(self.sound)
         )
     }
 
@@ -236,7 +239,8 @@ mod tests {
 
     #[test]
     fn settings_survive_a_round_trip_and_bad_input() {
-        let settings = Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard, update: false, animations: false };
+        let settings =
+            Settings { theme: find_theme("ocean").unwrap(), pieces: Pieces::Outlined, level: Level::Hard, update: false, animations: false, sound: false };
         assert_eq!(Settings::parse(&settings.format()), settings);
         assert_eq!(Settings::parse("theme=nope\npieces\n=\nlevel=HARD\nextra=1"), Settings { level: Level::Hard, ..Settings::default() });
 

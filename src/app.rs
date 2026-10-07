@@ -14,6 +14,7 @@ use crate::chess::{Color, Game, Kind, Move, Outcome, Square, file_of, rank_of, s
 use crate::engine::{self, Level};
 use crate::fx::{self, MoveFx};
 use crate::net::{self, Incoming, Link, Message, Pending};
+use crate::sound::{Sound, Speaker};
 use crate::theme::{Pieces, Settings, THEMES, Theme};
 
 /// The computer's move is held back this long, so that it does not land the instant
@@ -176,6 +177,11 @@ pub struct App {
     pub fx: Option<MoveFx>,
     /// When the confetti for a win began, or will.
     pub party: Option<Duration>,
+    /// The sound switch, kept like the update switch. What is heard is up to `speaker`.
+    pub sound: bool,
+    pub speaker: Speaker,
+    /// Sounds that wait for what they belong to: a piece landing, the result appearing.
+    cues: Vec<(Duration, Sound)>,
 
     pub menu_item: usize,
     pub level: Level,
@@ -234,6 +240,9 @@ impl App {
             advanced: Instant::now(),
             fx: None,
             party: None,
+            sound: settings.sound,
+            speaker: Speaker::silent(),
+            cues: Vec::new(),
             menu_item: 0,
             level: settings.level,
             side: Side::White,
@@ -284,7 +293,8 @@ impl App {
 
     fn remember(&self) {
         if let Some(path) = &self.settings_path {
-            Settings { theme: self.theme, pieces: self.pieces, level: self.level, update: self.auto_update, animations: self.animations }.save(path);
+            Settings { theme: self.theme, pieces: self.pieces, level: self.level, update: self.auto_update, animations: self.animations, sound: self.sound }
+                .save(path);
         }
     }
 
@@ -294,6 +304,8 @@ impl App {
         self.thinking = None;
         self.fx = None;
         self.party = None;
+        self.cues.clear();
+        self.speaker.play(Sound::Start);
         self.helped = 0;
         self.game = Game::new();
         self.opponent = opponent;
@@ -361,6 +373,7 @@ impl App {
         self.hinting = None;
         self.fx = None;
         self.party = None;
+        self.cues.clear();
         self.pending = None;
         self.link = None;
         self.prompt = None;
@@ -465,22 +478,62 @@ impl App {
             }
             _ => None,
         };
+        // One sound for the move, the most telling one, when the piece lands.
+        if let Some(last) = self.game.history.last() {
+            let (before, m) = (&last.before, last.mv);
+            let castled = before.at(m.from).is_some_and(|p| p.kind == Kind::King) && file_of(m.from).abs_diff(file_of(m.to)) == 2;
+            let sound = if m.promo.is_some() {
+                Sound::Promote
+            } else if self.game.board.in_check(self.game.board.turn) && !self.over() {
+                Sound::Check
+            } else if before.is_capture(m) {
+                Sound::Capture
+            } else if castled {
+                Sound::Castle
+            } else {
+                Sound::Move
+            };
+            self.cues.push((self.fx.as_ref().map_or(self.clock, MoveFx::lands), sound));
+        }
         self.after_move();
+    }
+
+    /// Plays the sounds whose time has come.
+    fn play_cues(&mut self, now: Duration) {
+        let due: Vec<Sound> = self.cues.iter().filter(|&&(when, _)| when <= now).map(|&(_, sound)| sound).collect();
+        self.cues.retain(|&(when, _)| when > now);
+        for sound in due {
+            self.speaker.play(sound);
+        }
     }
 
     /// Stops showing the last move: everything is where it ends up. True when there
     /// was something still moving.
     fn settle(&mut self) -> bool {
         self.party = self.party.map(|start| start.min(self.clock));
+        // What was waiting for it to finish is heard now.
+        self.play_cues(Duration::MAX);
         self.fx.take().is_some()
     }
 
-    /// Confetti, when the game was won by somebody at this keyboard.
+    /// The end of the game is heard, and there is confetti when it was won by somebody
+    /// at this keyboard.
     fn celebrate(&mut self) {
         let winner = self.game.outcome.and_then(Outcome::winner);
         let here = winner.is_some_and(|c| self.opponent == Opponent::Local || c == self.me);
-        // It waits for the last move to be shown.
-        self.party = (here && self.animations).then(|| self.fx.as_ref().map_or(self.clock, MoveFx::end));
+        // Both wait for the last move to be shown.
+        let when = self.fx.as_ref().map_or(self.clock, MoveFx::end);
+        self.party = (here && self.animations).then_some(when);
+        self.cues.push((
+            when,
+            if here {
+                Sound::Win
+            } else if winner.is_some() {
+                Sound::Lose
+            } else {
+                Sound::Draw
+            },
+        ));
     }
 
     /// Housekeeping after any move, whoever made it.
@@ -535,6 +588,9 @@ impl App {
     }
 
     fn show_hint(&mut self, m: Move) {
+        if self.hint.is_none() {
+            self.speaker.play(Sound::Hint);
+        }
         self.hint = Some(m);
         let kind = self.game.board.at(m.from).map_or("piece", |p| p.kind.name());
         self.message = format!("Try the {kind} from {} to {}", square_name(m.from), square_name(m.to));
@@ -547,6 +603,7 @@ impl App {
         }
         self.message.clear();
         self.fx = None;
+        self.cues.clear();
         // A resignation or an agreed draw is itself the last thing that happened.
         if matches!(self.game.outcome, Some(Outcome::Resigned(_) | Outcome::DrawAgreed)) {
             self.game.outcome = None;
@@ -652,6 +709,7 @@ impl App {
         if self.party.is_some_and(|start| self.clock >= start + fx::CONFETTI) {
             self.party = None;
         }
+        self.play_cues(self.clock);
         if let Some(thinking) = &self.thinking
             && thinking.since.elapsed() >= MIN_THINK
             && let Ok(reply) = thinking.rx.try_recv()
@@ -1111,7 +1169,7 @@ mod tests {
         app.start_local();
         type_keys(&mut app, "^t^p^p");
         assert_eq!((app.theme().name, app.pieces), (THEMES[2].name, Pieces::Letters));
-        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy, update: true, animations: true });
+        assert_eq!(Settings::load(&path), Settings { theme: 2, pieces: Pieces::Letters, level: Level::Easy, update: true, animations: true, sound: true });
         // Going round the end comes back to the start.
         for _ in 0..THEMES.len() - 2 {
             type_keys(&mut app, "^t");
@@ -1487,5 +1545,76 @@ mod tests {
         type_keys(&mut app, "^ry");
         assert_eq!(app.stars(), None);
         assert_eq!(local().stars(), None);
+    }
+
+    #[test]
+    fn what_happens_is_heard_when_it_is_seen() {
+        // Nothing moving: every sound comes at once.
+        let mut app = local();
+        assert_eq!(app.speaker.heard, [Sound::Start]);
+        type_keys(&mut app, "e2e4d7d5e4d5");
+        app.tick();
+        assert_eq!(app.speaker.heard[1..], [Sound::Move, Sound::Move, Sound::Capture]);
+        // Taking it back is silent.
+        type_keys(&mut app, "^u");
+        app.tick();
+        assert_eq!(app.speaker.heard.len(), 4);
+
+        let heard_after = |fen: &str, typed: &str| {
+            let mut app = local();
+            app.game.board = crate::chess::Board::from_fen(fen).unwrap();
+            type_keys(&mut app, typed);
+            app.tick();
+            app.speaker.heard[1..].to_vec()
+        };
+        assert_eq!(heard_after("r3k3/8/8/8/8/8/8/R3K2R w KQq - 0 1", "e1g1"), [Sound::Castle]);
+        assert_eq!(heard_after("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5"), [Sound::Capture]);
+        assert_eq!(heard_after("r3k3/8/8/8/8/8/8/R3K2R w KQq - 0 1", "h1h8"), [Sound::Check]);
+        assert_eq!(heard_after("7k/P7/8/8/8/8/8/K7 w - - 0 1", "a7a8q"), [Sound::Promote]);
+        // The end of a game: won at this keyboard, drawn, and lost to the computer.
+        assert_eq!(heard_after("6k1/5ppp/8/8/8/8/8/R3K3 w - - 0 1", "a1a8"), [Sound::Move, Sound::Win]);
+        assert_eq!(heard_after("7k/P7/8/8/8/8/8/K7 w - - 0 1", "a7a8n"), [Sound::Promote, Sound::Draw]);
+        assert_eq!(heard_after("8/8/8/8/8/8/8/K6k w - - 0 1", "^ry"), [Sound::Win]);
+        let mut app = App::new(true, Settings::default());
+        app.start_computer();
+        type_keys(&mut app, "^ry");
+        app.tick();
+        assert_eq!(app.speaker.heard, [Sound::Start, Sound::Lose]);
+
+        // With pieces moving, the sound waits for the piece to land and the result
+        // for the king to fall.
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        type_keys(&mut app, "f2f3e7e5g2g4");
+        assert_eq!(app.speaker.heard, [Sound::Start, Sound::Move, Sound::Move], "each key ended the move before it");
+        app.tick();
+        assert_eq!(app.speaker.heard.len(), 3, "the pawn is still on its way");
+        app.clock += Duration::from_millis(400);
+        app.tick();
+        assert_eq!(app.speaker.heard.len(), 4);
+        type_keys(&mut app, "d8h4");
+        app.clock += Duration::from_millis(400);
+        app.tick();
+        assert_eq!(app.speaker.heard[4..], [Sound::Move]);
+        let_it_finish(&mut app);
+        assert_eq!(app.speaker.heard[4..], [Sound::Move, Sound::Win]);
+        // Cut short by a key, both are heard at once and never twice.
+        type_keys(&mut app, "^ud8h4x");
+        let_it_finish(&mut app);
+        assert_eq!(app.speaker.heard[6..], [Sound::Move, Sound::Win]);
+    }
+
+    #[test]
+    fn a_hint_is_heard_once() {
+        let mut app = local();
+        type_keys(&mut app, "^g");
+        let started = Instant::now();
+        while app.hint.is_none() {
+            app.tick();
+            assert!(started.elapsed() < Duration::from_secs(20), "no hint came");
+            thread::sleep(Duration::from_millis(10));
+        }
+        type_keys(&mut app, "^g^g");
+        assert_eq!(app.speaker.heard, [Sound::Start, Sound::Hint]);
     }
 }

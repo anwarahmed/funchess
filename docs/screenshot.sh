@@ -12,7 +12,7 @@ TMP=$(mktemp -d)
 T() { tmux -L funchess-shot "$@"; }
 trap 'T kill-server 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
-T new-session -d -s shot -x 132 -y 50 "env COLORTERM=truecolor XDG_STATE_HOME='$TMP/xdg' FUNCHESS_NO_UPDATE=1 '$BIN' local; sleep 30"
+T new-session -d -s shot -x 132 -y 50 "env COLORTERM=truecolor XDG_STATE_HOME='$TMP/xdg' FUNCHESS_NO_UPDATE=1 FUNCHESS_NO_SOUND=1 '$BIN' local; sleep 30"
 sleep 1
 # The Italian game, then the knight on f3 picked up to show where it can go.
 T send-keys -t shot -l e2e4e7e5g1f3b8c6f1c4f8c5f3

@@ -10,7 +10,8 @@ Chess for the terminal, on Linux and macOS.
 - **Made to be fun, for children most of all.** Pieces slide to their squares and the
   knight jumps, a captured piece bursts, a king in check shakes and a mated one falls
   over. The computer has a face that shows how it feels, a win gets confetti and
-  stars, and `Ctrl-G` shows a good move when you are stuck.
+  stars, and `Ctrl-G` shows a good move when you are stuck. Moves, captures, checks
+  and wins have their own sounds.
 
 All the rules are in: castling, en passant, promotion, check, checkmate, stalemate,
 and draws by repetition, the fifty-move rule and too few pieces.
@@ -142,6 +143,12 @@ Pieces are shown moving. A key or a click never waits for that: it ends whatever
 still moving and acts at once. `funchess --animations off` switches the movement off
 (`on` brings it back), and that is remembered.
 
+There are sounds for a move, a capture, castling, check, promotion, a hint, and for
+winning, losing and drawing. They are played by a program your system already has:
+`pw-play`, `paplay` or `aplay` on Linux, `afplay` on macOS; without one of them the
+game is simply silent. `funchess --sound off` switches them off (`on` brings them
+back), which is remembered, and `FUNCHESS_NO_SOUND=1` does it for one run.
+
 Everything can also be clicked: the lines of the main menu (a setting steps
 forward, or back from its `<`), the commands beside the board, and
 the answers in a question box.
@@ -162,7 +169,7 @@ candy, sunset, neon, tropical, citrus and aurora. Five ways of drawing the piece
 Change either with `T` and `P` in the menu (which shows a sample), with `Ctrl-T` and
 `Ctrl-P` during a game, or start with `--theme ocean --pieces outlined`. The choice is remembered in
 `~/.local/state/funchess/settings` (under `$XDG_STATE_HOME` when that is set), along
-with the computer's level and whether pieces are shown moving.
+with the computer's level, whether pieces are shown moving and whether there is sound.
 
 The board is as tall as the window allows. The players, the state of the game and
 the commands are to its right, and the moves to its left when the window is wide
