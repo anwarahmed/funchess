@@ -141,6 +141,13 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   (`App::bottom`), at the user's request. It is worked out from the position, so a
   take-back turns it back, and Ctrl-F shows the other side until it is pressed again.
   Against the computer or over the network the board stays where the player sits.
+- **The end of a game is announced in a box** (`Prompt::GameOver`, text in
+  `ui::game_over`), at the user's request: who won and why, the score, the number of
+  moves and the last one, the material, the computer's level, whatever `App::message`
+  says (the box may cover it), and what to do next. It is not a question: a command
+  closes it and acts, and only Enter, Esc, Space, y or n dismiss it, so a key meant
+  for the board does not make it vanish unread. `App::end` and `App::after_move` open
+  it. A short window drops the facts and keeps the result and the commands.
 - **Undo after a resignation or agreed draw** reopens the game without removing a
   move; against the computer, undo goes back to the player's previous turn (their
   move and the reply).

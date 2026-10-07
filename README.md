@@ -120,6 +120,10 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 | `Ctrl-C` | quit at once |
 | `?` | help |
 
+When a game ends a box says who won and why, with the score, the number of moves, the
+material and what you can do next: a new game, take the last move back, the menu, or
+Enter to look at the final position.
+
 Everything can also be clicked: the lines of the main menu (a setting steps
 forward, or back from its `<`), the commands beside the board, and
 the answers in a question box.
