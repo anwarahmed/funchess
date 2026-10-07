@@ -135,12 +135,26 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - **Direct TCP, no relay server.** The user chose this over hosting a server. It
   works on one network, a VPN, or a forwarded port (6464 by default), and not between
   two home networks otherwise. The README says so plainly.
+- **A failed join says what to do** (`net::why_not`): no answer means a firewall on
+  the host, a refusal means nobody is hosting on that port. The host's waiting screen
+  shows `sudo ufw allow <port>/tcp` when `net::firewall_command` sees ufw on with no
+  rule for the port (it reads `/etc/ufw/ufw.conf` and `user.rules`, both
+  world-readable). The user reported "cannot connect" every time in October 2026: ufw
+  on their Arch machine (Omarchy turns it on, incoming dropped) was blocking 6464. The
+  program was fine. Check the firewall first if it comes back.
 - **No take-backs in a network game**, and the computer never accepts a draw. Both are
   simplifications, not principles.
 - **With two players at one keyboard the board faces whoever is to move**
   (`App::bottom`), at the user's request. It is worked out from the position, so a
   take-back turns it back, and Ctrl-F shows the other side until it is pressed again.
   Against the computer or over the network the board stays where the player sits.
+- **The end of a game is announced in a box** (`Prompt::GameOver`, text in
+  `ui::game_over`), at the user's request: who won and why, the score, the number of
+  moves and the last one, the material, the computer's level, whatever `App::message`
+  says (the box may cover it), and what to do next. It is not a question: a command
+  closes it and acts, and only Enter, Esc, Space, y or n dismiss it, so a key meant
+  for the board does not make it vanish unread. `App::end` and `App::after_move` open
+  it. A short window drops the facts and keeps the result and the commands.
 - **Undo after a resignation or agreed draw** reopens the game without removing a
   move; against the computer, undo goes back to the player's previous turn (their
   move and the reply).

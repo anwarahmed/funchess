@@ -122,10 +122,35 @@ fn connect(address: &str) -> Result<TcpStream, String> {
     for target in targets {
         match TcpStream::connect_timeout(&target, Duration::from_secs(8)) {
             Ok(stream) => return Ok(stream),
-            Err(e) => error = format!("cannot reach {target}: {e}"),
+            Err(e) => error = why_not(&target, &e),
         }
     }
     Err(error)
+}
+
+/// Why a connection failed, in terms of what to do about it. Silence nearly always
+/// means a firewall on the host dropped the attempt; a refusal means the computer is
+/// there and nothing is listening.
+fn why_not(target: &std::net::SocketAddr, error: &io::Error) -> String {
+    let (ip, port) = (target.ip(), target.port());
+    match error.kind() {
+        io::ErrorKind::TimedOut => format!("no answer from {ip} (is its firewall blocking port {port}?)"),
+        io::ErrorKind::ConnectionRefused => format!("{ip} is there, but nobody is hosting on port {port}"),
+        _ => format!("cannot reach {target}: {error}"),
+    }
+}
+
+/// The command that lets other computers in on `port`, when this computer runs the
+/// ufw firewall and has no rule for the port yet. Without it a joiner gets no answer.
+pub fn firewall_command(port: u16) -> Option<String> {
+    ufw_command(port, &std::fs::read_to_string("/etc/ufw/ufw.conf").ok()?, &std::fs::read_to_string("/etc/ufw/user.rules").unwrap_or_default())
+}
+
+fn ufw_command(port: u16, conf: &str, rules: &str) -> Option<String> {
+    let on = conf.lines().any(|l| l.trim().eq_ignore_ascii_case("ENABLED=yes"));
+    let open =
+        rules.lines().any(|l| l.starts_with("-A ufw-user-input") && l.contains("ACCEPT") && l.contains(&format!("--dport {port} ")) && !l.contains("-p udp"));
+    (on && !open).then(|| format!("sudo ufw allow {port}/tcp"))
 }
 
 /// This computer's address on the local network, for the host to tell the joiner.
@@ -228,6 +253,19 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn failures_say_what_to_do_and_a_closed_firewall_is_noticed() {
+        let target = "192.168.1.20:6464".parse().unwrap();
+        assert_eq!(super::why_not(&target, &io::ErrorKind::TimedOut.into()), "no answer from 192.168.1.20 (is its firewall blocking port 6464?)");
+        assert_eq!(super::why_not(&target, &io::ErrorKind::ConnectionRefused.into()), "192.168.1.20 is there, but nobody is hosting on port 6464");
+
+        let rules = "-A ufw-user-input -p udp --dport 6464 -j ACCEPT\n-A ufw-user-input -p tcp --dport 53317 -j ACCEPT\n";
+        assert_eq!(super::ufw_command(6464, "ENABLED=yes\n", rules), Some("sudo ufw allow 6464/tcp".into()));
+        assert_eq!(super::ufw_command(53317, "ENABLED=yes\n", rules), None);
+        assert_eq!(super::ufw_command(6464, "ENABLED=yes\n", "-A ufw-user-input -p tcp --dport 6464 -j ACCEPT\n"), None);
+        assert_eq!(super::ufw_command(6464, "ENABLED=no\n", rules), None);
+    }
+
     use super::*;
     use std::time::Instant;
 

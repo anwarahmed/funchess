@@ -133,8 +133,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             app.buttons.push((Rect::new(x + 17, y + row, 8, 1), Click::Key(KeyCode::Esc, false)));
         }
         Screen::Connecting(text) => {
-            let mut lines: Vec<Line> =
-                text.iter().map(|l| if l.starts_with("funchess ") { Line::styled(l.clone(), bold()) } else { Line::raw(l.clone()) }).collect();
+            let mut lines: Vec<Line> = text
+                .iter()
+                .map(|l| if l.starts_with("funchess ") || l.starts_with("sudo ") { Line::styled(l.clone(), bold()) } else { Line::raw(l.clone()) })
+                .collect();
             lines.extend([Line::raw(""), Line::styled("Esc cancel", dim())]);
             let row = lines.len() as u16 - 1;
             let (x, y) = centered(buf, area, "Network game", 2, lines);
@@ -586,6 +588,7 @@ fn popup(buf: &mut Buffer, area: Rect, app: &mut App, prompt: Prompt) {
         Prompt::DrawOffered => ("Draw", vec!["Your opponent offers a draw.".into(), "Accept?".into(), String::new(), "y  yes     n  no".into()]),
         Prompt::Leave => ("Leave", vec!["Leave this game unfinished?".into(), String::new(), "y  yes     n  no".into()]),
         Prompt::NewGame => ("New game", vec!["Abandon this game and start again?".into(), String::new(), "y  yes     n  no".into()]),
+        Prompt::GameOver => ("Game over", game_over(app, area.height.saturating_sub(2) as usize)),
         Prompt::Help => (
             "Help",
             [
@@ -625,6 +628,18 @@ fn popup(buf: &mut Buffer, area: Rect, app: &mut App, prompt: Prompt) {
         match (prompt, line.as_str()) {
             (Prompt::Help, _) => app.buttons.push((rect, Click::Key(KeyCode::Esc, false))),
             (_, ANSWERS) => app.buttons.extend([(Rect::new(x, y, 6, 1), key('y')), (Rect::new(x + 11, y, 5, 1), key('n'))]),
+            (Prompt::GameOver, text) => {
+                let click = match text.split_once("  ") {
+                    Some(("Enter", _)) => Some(Click::Key(KeyCode::Enter, false)),
+                    Some((name, _)) => {
+                        name.strip_prefix("Ctrl-").and_then(|c| c.chars().next()).map(|c| Click::Key(KeyCode::Char(c.to_ascii_lowercase()), true))
+                    }
+                    None => None,
+                };
+                if let Some(click) = click.filter(|_| y < rect.bottom().saturating_sub(1)) {
+                    app.buttons.push((whole, click));
+                }
+            }
             (Prompt::Promotion { .. }, "") => {}
             (Prompt::Promotion { .. }, text) if text.starts_with("Esc") => app.buttons.push((whole, Click::Key(KeyCode::Esc, false))),
             (Prompt::Promotion { .. }, text) => app.buttons.push((whole, key(text.chars().next().unwrap_or('q')))),
@@ -632,7 +647,92 @@ fn popup(buf: &mut Buffer, area: Rect, app: &mut App, prompt: Prompt) {
         }
     }
     let block = Block::bordered().title(format!(" {title} ")).border_style(Style::new().fg(TermColor::Cyan)).padding(ratatui::widgets::Padding::horizontal(1));
-    Paragraph::new(lines.into_iter().map(Line::raw).collect::<Vec<_>>()).block(block).render(rect, buf);
+    let mut lines: Vec<Line> = lines.into_iter().map(Line::raw).collect();
+    if prompt == Prompt::GameOver
+        && let Some(first) = lines.first_mut()
+    {
+        *first = std::mem::take(first).style(bold());
+    }
+    Paragraph::new(lines).block(block).render(rect, buf);
+}
+
+/// What the box shown at the end of a game says: who won and why, a few facts about
+/// the game, and what can be done next. With fewer than `rows` to fill, the facts go
+/// first and the result and the commands stay.
+fn game_over(app: &App, rows: usize) -> Vec<String> {
+    use crate::chess::Outcome;
+    let Some(outcome) = app.game.outcome else { return Vec::new() };
+    let local = app.opponent == Opponent::Local;
+    let winner = match outcome {
+        Outcome::Checkmate(c) | Outcome::Resigned(c) | Outcome::Abandoned(c) => Some(c),
+        _ => None,
+    };
+    let headline = match winner {
+        None => "Draw".to_string(),
+        Some(c) if local => format!("{} wins", c.name()),
+        Some(c) if c == app.me => "You win!".to_string(),
+        Some(_) => "You lose".to_string(),
+    };
+    let reason = match outcome {
+        Outcome::Checkmate(_) => "Checkmate".to_string(),
+        Outcome::Resigned(c) if local => format!("{} resigned", c.other().name()),
+        Outcome::Resigned(c) if c == app.me => "Your opponent resigned".to_string(),
+        Outcome::Resigned(_) => "You resigned".to_string(),
+        Outcome::Abandoned(_) => "Your opponent left the game".to_string(),
+        Outcome::Stalemate => format!("Stalemate: {} cannot move", app.game.board.turn.name()),
+        Outcome::Repetition => "The same position, three times".to_string(),
+        Outcome::FiftyMoves => "Fifty moves, no capture or pawn move".to_string(),
+        Outcome::InsufficientMaterial => "Too few pieces left to mate".to_string(),
+        Outcome::DrawAgreed => "Agreed by both players".to_string(),
+    };
+    let score = match winner {
+        Some(Color::White) => "1-0",
+        Some(Color::Black) => "0-1",
+        None => "½-½",
+    };
+    let played = match app.game.history.last() {
+        None => format!("{score} before a move was played"),
+        Some(last) => {
+            let moves = app.game.history.len().div_ceil(2);
+            format!("{score} after {moves} move{} ({})", if moves == 1 { "" } else { "s" }, last.san)
+        }
+    };
+    let ahead: i32 = (0..64)
+        .filter_map(|s| app.game.board.at(s))
+        .map(|p| {
+            let worth = [1, 3, 3, 5, 9, 0][p.kind as usize];
+            if p.color == Color::White { worth } else { -worth }
+        })
+        .sum();
+    let material = match ahead {
+        0 => "Material: even".to_string(),
+        n => format!("Material: {} +{}", if n > 0 { Color::White } else { Color::Black }.name(), n.abs()),
+    };
+
+    // Each line with how soon it goes when the window is short: 0 never.
+    let mut lines = vec![(0, headline), (0, reason)];
+    // Whatever is being said beside the board, which this box may cover: why the
+    // connection closed, or that the other player wants a rematch.
+    if !app.message.is_empty() {
+        lines.push((1, app.message.clone()));
+    }
+    lines.extend([(5, String::new()), (2, played), (3, material)]);
+    if let Opponent::Computer(level) = app.opponent {
+        lines.push((4, format!("Computer level: {}", level.name())));
+    }
+    lines.push((5, String::new()));
+    match app.opponent {
+        Opponent::Remote if app.connected() => lines.push((0, "Ctrl-N  rematch, colors swapped".into())),
+        Opponent::Remote => {}
+        _ => lines.extend([(0, "Ctrl-N  new game".into()), (0, "Ctrl-U  take the last move back".into())]),
+    }
+    lines.extend([(0, "Ctrl-Q  back to the menu".into()), (0, "Enter   look at the board".into())]);
+    for drop in (1..=5).rev() {
+        if lines.len() > rows {
+            lines.retain(|&(when, _)| when != drop);
+        }
+    }
+    lines.into_iter().map(|(_, line)| line).collect()
 }
 
 #[cfg(test)]
@@ -688,7 +788,9 @@ mod tests {
             app.start_local();
             keys(&mut app, "e2e4e7e5g1");
             render(&mut app, width, height);
-            for prompt in [Prompt::Help, Prompt::Resign, Prompt::DrawOffered, Prompt::Leave, Prompt::NewGame, Prompt::Promotion { from: 0, to: 0 }] {
+            for prompt in
+                [Prompt::Help, Prompt::Resign, Prompt::DrawOffered, Prompt::Leave, Prompt::NewGame, Prompt::GameOver, Prompt::Promotion { from: 0, to: 0 }]
+            {
                 app.prompt = Some(prompt);
                 render(&mut app, width, height);
             }
@@ -831,6 +933,46 @@ mod tests {
     }
 
     #[test]
+    fn the_result_box_says_who_won_and_why() {
+        use crate::chess::Outcome;
+        use crate::engine::Level;
+        let mut app = App::new(true, Settings::default());
+        app.start_local();
+        keys(&mut app, "f2f3e7e5g2g4d8h4");
+        let shown = text(&render(&mut app, 80, 24));
+        for part in ["Black wins", "Checkmate", "0-1 after 2 moves (Qh4#)", "Material: even", "Ctrl-U  take the last move back"] {
+            assert!(shown.contains(part), "{part} is missing from\n{shown}");
+        }
+        // In the shortest window a game fits in, the facts go and the rest stays clickable.
+        let buf = render(&mut app, 62, 9);
+        let shown = text(&buf);
+        for part in ["Black wins", "Checkmate", "Ctrl-N  new game", "Ctrl-Q  back to the menu", "Enter   look at the board"] {
+            assert!(shown.contains(part), "{part} is missing from\n{shown}");
+        }
+        assert!(!shown.contains("Material"), "{shown}");
+        let (x, y) = find(&buf, "Ctrl-N  new game");
+        click(&mut app, x, y);
+        assert!(app.prompt.is_none() && app.game.history.is_empty());
+
+        // Against the computer it is about the player, and a capture shows in the material.
+        app.opponent = Opponent::Computer(Level::Easy);
+        keys(&mut app, "e2e4");
+        app.game.board = Board::from_fen("4k3/8/8/8/8/8/8/4K2R b - - 0 30").unwrap();
+        for (outcome, parts) in [
+            (Outcome::Resigned(Color::White), ["You win!", "Your opponent resigned", "Material: White +5", "Computer level: Easy"]),
+            (Outcome::Checkmate(Color::Black), ["You lose", "Checkmate", "0-1 after 1 move (e4)", "Ctrl-N  new game"]),
+            (Outcome::Stalemate, ["Draw", "Stalemate: Black cannot move", "½-½ after 1 move (e4)", "Ctrl-Q"]),
+        ] {
+            app.game.outcome = Some(outcome);
+            app.prompt = Some(Prompt::GameOver);
+            let shown = text(&render(&mut app, 80, 24));
+            for part in parts {
+                assert!(shown.contains(part), "{part} is missing from\n{shown}");
+            }
+        }
+    }
+
+    #[test]
     fn menu_lines_can_be_clicked() {
         let mut app = App::new(true, Settings::default());
         let buf = render(&mut app, 80, 24);
@@ -879,6 +1021,19 @@ mod tests {
         let (x, y) = find(&buf, "y  yes");
         click(&mut app, x + 5, y);
         assert_eq!(app.game.outcome, Some(crate::chess::Outcome::Resigned(Color::White)));
+
+        // The result is announced in a box whose lines are the only buttons.
+        let buf = render(&mut app, 80, 24);
+        let shown = text(&buf);
+        for part in ["Game over", "White wins", "Black resigned", "1-0 after 1 move (e4)", "Material: even", "Ctrl-N  new game", "Ctrl-Q  back to the menu"] {
+            assert!(shown.contains(part), "{part} is missing from\n{shown}");
+        }
+        assert_eq!(app.buttons.len(), 4);
+        click(&mut app, 1, 1);
+        assert_eq!(app.prompt, Some(Prompt::GameOver));
+        let (x, y) = find(&buf, "Enter   look at the board");
+        click(&mut app, x, y);
+        assert!(app.prompt.is_none() && app.over());
 
         // Every command fits somewhere, and the help closes on a click.
         render(&mut app, 132, 52);

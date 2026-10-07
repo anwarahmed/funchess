@@ -114,6 +114,9 @@ pub enum Prompt {
     Leave,
     NewGame,
     Help,
+    /// The game has just ended: the result, and what can be done next. Not a question,
+    /// so a command closes it and acts.
+    GameOver,
 }
 
 struct Thinking {
@@ -291,15 +294,20 @@ impl App {
                 self.hosting = true;
                 let port = if self.port == net::DEFAULT_PORT { String::new() } else { format!(":{}", self.port) };
                 let address = net::local_ip().map_or("<this computer's address>".to_string(), |ip| ip.to_string());
-                self.screen = Screen::Connecting(vec![
+                let mut lines = vec![
                     format!("Waiting for the other player. You play {}.", self.me.name()),
                     String::new(),
                     "On the other computer, run:".into(),
                     format!("funchess join {address}{port}"),
                     String::new(),
-                    "Both computers must be on the same network, or the".into(),
-                    format!("other must be able to reach this one on port {}.", self.port),
-                ]);
+                    "Both computers must be on the same network, and this".into(),
+                    format!("one's firewall must let connections in on port {}.", self.port),
+                ];
+                // A firewall that drops the attempt is the usual reason nobody arrives.
+                if let Some(command) = net::firewall_command(self.port) {
+                    lines.extend([String::new(), "This computer's firewall is blocking that port.".into(), "To let the other player in, run:".into(), command]);
+                }
+                self.screen = Screen::Connecting(lines);
             }
             Err(e) => self.back_to_menu(format!("Cannot host on port {}: {e}", self.port)),
         }
@@ -340,6 +348,11 @@ impl App {
     pub fn bottom(&self) -> Color {
         let near = if self.opponent == Opponent::Local { self.game.board.turn } else { self.me };
         if self.flipped { near.other() } else { near }
+    }
+
+    /// Whether the other computer is still there, in a network game.
+    pub fn connected(&self) -> bool {
+        self.link.is_some()
     }
 
     pub fn is_thinking(&self) -> bool {
@@ -410,6 +423,9 @@ impl App {
             });
             self.thinking = Some(Thinking { rx, stop, since: Instant::now() });
         }
+        if self.over() {
+            self.prompt = Some(Prompt::GameOver);
+        }
     }
 
     fn undo(&mut self) {
@@ -451,7 +467,9 @@ impl App {
         self.game.outcome = Some(outcome);
         self.thinking = None;
         self.selected = None;
-        self.prompt = None;
+        // The result box repeats the message, so one left from earlier must not linger.
+        self.message.clear();
+        self.prompt = Some(Prompt::GameOver);
     }
 
     fn offer_draw(&mut self) {
@@ -610,8 +628,10 @@ impl App {
             'q' => self.back_to_menu(String::new()),
             't' => self.change_theme(true),
             'p' => self.change_pieces(true),
-            // The rest act on a game, and wait while a question is open.
-            _ if !in_game || self.prompt.is_some() => {}
+            // The rest act on a game, and wait while a question is open. The box that
+            // announces the result is not a question: it closes and the command acts.
+            _ if !in_game || self.prompt.is_some_and(|p| p != Prompt::GameOver) => {}
+            _ if self.prompt.take().is_some() => self.command(letter),
             'u' => self.undo(),
             'r' | 'd' if self.over() => self.message = "The game is over".into(),
             'r' => self.prompt = Some(Prompt::Resign),
@@ -728,6 +748,10 @@ impl App {
         let no = matches!(code, KeyCode::Char('n' | 'N') | KeyCode::Esc);
         match prompt {
             Prompt::Help => self.prompt = None,
+            // Only the keys it names close it, so that a key meant for the board,
+            // pressed as the game ended, does not make the result vanish unread.
+            Prompt::GameOver if yes || no || code == KeyCode::Char(' ') => self.prompt = None,
+            Prompt::GameOver => {}
             Prompt::Promotion { from, to } => {
                 let kind = match code {
                     KeyCode::Char('q') | KeyCode::Enter => Kind::Queen,
@@ -1029,7 +1053,34 @@ mod tests {
         assert_eq!(app.prompt, Some(Prompt::Promotion { from: sq(0, 6), to: sq(0, 7) }));
         type_keys(&mut app, "n");
         assert_eq!(sans(&app), ["a8=N"]);
-        assert_eq!(app.prompt, None);
+        // A king and a knight cannot mate, so that was the last move.
+        assert_eq!((app.prompt, app.game.outcome), (Some(Prompt::GameOver), Some(Outcome::InsufficientMaterial)));
+    }
+
+    /// The end of a game is announced in a box, which the commands work through.
+    #[test]
+    fn the_end_of_a_game_is_announced() {
+        let mut app = local();
+        type_keys(&mut app, "f2f3e7e5g2g4d8h4");
+        assert_eq!((app.game.outcome, app.prompt), (Some(Outcome::Checkmate(Color::Black)), Some(Prompt::GameOver)));
+        // Keys meant for the board do not close it; Enter does.
+        type_keys(&mut app, "e2x?");
+        key(&mut app, KeyCode::Up);
+        assert_eq!(app.prompt, Some(Prompt::GameOver));
+        key(&mut app, KeyCode::Enter);
+        assert!(app.prompt.is_none() && app.over());
+        // A command closes it and acts: here the mate is taken back, and given again.
+        type_keys(&mut app, "^ud8h4");
+        assert_eq!(app.prompt, Some(Prompt::GameOver));
+        type_keys(&mut app, "^u");
+        assert!(app.prompt.is_none() && !app.over() && app.game.history.len() == 3);
+        type_keys(&mut app, "d8h4^n");
+        assert!(app.prompt.is_none() && !app.over() && app.game.history.is_empty());
+        // Resigning and agreeing a draw announce it too, and Ctrl-Q leaves without asking.
+        type_keys(&mut app, "^u^ue2e4^ry");
+        assert_eq!((app.prompt, app.message.as_str()), (Some(Prompt::GameOver), ""));
+        type_keys(&mut app, "^q");
+        assert!(matches!(app.screen, Screen::Menu) && app.prompt.is_none());
     }
 
     #[test]
