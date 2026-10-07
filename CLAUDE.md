@@ -181,6 +181,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - Look at it. To see the pixel art without a screen, capture a run with
   `tmux -L <private socket> capture-pane -p -e` and turn the half blocks into an
   image.
+- **The README's picture** is `docs/screenshot.png`, made by `docs/screenshot.sh` from
+  the built program (tmux capture, drawn as an SVG, turned into a PNG by
+  `rsvg-convert`). It is not a photograph of a terminal. Run the script again when the
+  look of the game changes, and look at the result.
 - **Never run `tmux kill-server` on the default socket, and never start test sessions
   there.** The user works inside tmux; doing so once closed their terminal. Use
   `tmux -L <name>` for everything, as `tests/e2e.sh` does.
@@ -197,7 +201,6 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   between a Mac and another computer; CI runs the network tests on one machine.
 - The AUR package `funchess-bin` is rendered for each release but not pushed: the user
   has no AUR account.
-- No README screenshot yet.
 - No clocks, no saved or resumable games, no PGN export, no way to set up a position.
 - The engine has no opening book, transposition table or draw-offer judgement.
 - The 8-pixel art is rough; the rook and queen are less distinct than at larger sizes.
