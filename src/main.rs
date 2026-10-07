@@ -35,7 +35,8 @@ Options:
   -w, --white                 play White (default)
   -b, --black                 play Black
   -r, --random                play either color, picked at random
-  -t, --theme NAME            forest, wood, ocean, slate, plum or ruby
+  -t, --theme NAME            forest, wood, ocean, slate, plum, ruby, candy, sunset,
+                              neon, tropical, citrus or aurora
   -p, --pieces STYLE          solid, outlined, shaded (pixel art, in a large enough
                               window), symbols, or letters if your font lacks
                               chess symbols
@@ -104,7 +105,7 @@ fn main() -> ExitCode {
             "-r" | "--random" => app.side = Side::Random,
             "-t" | "--theme" => match args.next().as_deref().and_then(theme::find_theme) {
                 Some(theme) => app.theme = theme,
-                None => return fail("--theme needs one of: forest, wood, ocean, slate, plum, ruby"),
+                None => return fail("--theme needs one of: forest, wood, ocean, slate, plum, ruby, candy, sunset, neon, tropical, citrus, aurora"),
             },
             "-p" | "--pieces" => match args.next().as_deref().and_then(Pieces::parse) {
                 Some(pieces) => app.pieces = pieces,

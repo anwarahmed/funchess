@@ -126,8 +126,8 @@ the answers in a question box.
 
 ## Looks
 
-Six color themes: forest, wood, ocean, slate, plum and ruby. Five ways of drawing
-the pieces:
+Twelve color themes: forest, wood, ocean, slate, plum and ruby, and the more colorful
+candy, sunset, neon, tropical, citrus and aurora. Five ways of drawing the pieces:
 
 | Style | |
 |---|---|
