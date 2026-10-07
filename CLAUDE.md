@@ -102,6 +102,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   panel with players, status and commands is to its right, and the moves go to its
   left when there is room, else into the right panel. The user asked for the board
   to use the height and for the sides to hold everything else.
+- **The menu always shows its nine choices** (`ui::menu`). A short window gives up, in
+  order, the empty rows, the title, the keys line and the error line; a narrow one
+  gets a shorter keys line. It fits whole at 39 x 12 and keeps every choice at 9 rows,
+  the shortest window a game fits in. The user asked for it to fit at 39 x 12.
 - **Pixel art** is drawn with `▀`, foreground the upper pixel and background the
   lower. A square of height `h` rows is `2h` columns wide, so `2h` pixels square.
   The art exists at 8, 10 and 12 pixels (`SMALL`, `MEDIUM`, `LARGE`); the largest
@@ -133,6 +137,10 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   two home networks otherwise. The README says so plainly.
 - **No take-backs in a network game**, and the computer never accepts a draw. Both are
   simplifications, not principles.
+- **With two players at one keyboard the board faces whoever is to move**
+  (`App::bottom`), at the user's request. It is worked out from the position, so a
+  take-back turns it back, and Ctrl-F shows the other side until it is pressed again.
+  Against the computer or over the network the board stays where the player sits.
 - **Undo after a resignation or agreed draw** reopens the game without removing a
   move; against the computer, undo goes back to the player's previous turn (their
   move and the reply).

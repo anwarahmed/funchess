@@ -3,7 +3,7 @@
 Chess for the terminal, on Linux and macOS.
 
 - **Against the computer**, at four levels (beginner, easy, medium, hard), as White or Black.
-- **Two players at one keyboard.**
+- **Two players at one keyboard.** The board turns to face whoever is to move.
 - **Two players on two computers**, over a direct connection.
 
 All the rules are in: castling, en passant, promotion, check, checkmate, stalemate,
@@ -113,7 +113,7 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 | `Ctrl-R` | resign |
 | `Ctrl-D` | offer a draw |
 | `Ctrl-N` | new game; in a network game, a rematch with colors swapped |
-| `Ctrl-F` or `Tab` | flip the board |
+| `Ctrl-F` or `Tab` | flip the board (with two players at one keyboard it then faces whoever is not to move) |
 | `Ctrl-T` | next color theme |
 | `Ctrl-P` | next way of drawing the pieces |
 | `Ctrl-Q` or `Esc` | back to the menu |
@@ -126,8 +126,8 @@ the answers in a question box.
 
 ## Looks
 
-Six color themes: forest, wood, ocean, slate, plum and ruby. Five ways of drawing
-the pieces:
+Twelve color themes: forest, wood, ocean, slate, plum and ruby, and the more colorful
+candy, sunset, neon, tropical, citrus and aurora. Five ways of drawing the pieces:
 
 | Style | |
 |---|---|

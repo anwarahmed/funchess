@@ -335,9 +335,11 @@ impl App {
         !self.over() && (self.opponent == Opponent::Local || self.game.board.turn == self.me)
     }
 
-    /// The color at the bottom of the board.
+    /// The color at the bottom of the board. Two players at one keyboard take turns
+    /// sitting there, so the board turns to face whoever is to move.
     pub fn bottom(&self) -> Color {
-        if self.flipped { self.me.other() } else { self.me }
+        let near = if self.opponent == Opponent::Local { self.game.board.turn } else { self.me };
+        if self.flipped { near.other() } else { near }
     }
 
     pub fn is_thinking(&self) -> bool {
@@ -848,17 +850,44 @@ mod tests {
         let mut app = local();
         type_keys(&mut app, "e2e4");
         assert_eq!(sans(&app), ["e4"]);
-        // The cursor is on e4; Black's e-pawn is three up and stays put, so walk to e7.
+        // The cursor is on e4 and the board now faces Black, whose e-pawn is three
+        // rows nearer: walk down to e7.
         for _ in 0..3 {
-            key(&mut app, KeyCode::Up);
+            key(&mut app, KeyCode::Down);
         }
         key(&mut app, KeyCode::Enter);
         assert_eq!(app.selected, Some(sq(4, 6)));
         assert_eq!(app.targets().len(), 2);
-        key(&mut app, KeyCode::Down);
-        key(&mut app, KeyCode::Down);
+        key(&mut app, KeyCode::Up);
+        key(&mut app, KeyCode::Up);
         key(&mut app, KeyCode::Char(' '));
         assert_eq!(sans(&app), ["e4", "e5"]);
+    }
+
+    /// Two players at one keyboard: the board turns to face whoever is to move.
+    #[test]
+    fn the_board_faces_the_player_to_move_in_a_local_game() {
+        let mut app = local();
+        assert_eq!(app.bottom(), Color::White);
+        type_keys(&mut app, "e2e4");
+        assert_eq!(app.bottom(), Color::Black);
+        type_keys(&mut app, "e7e5");
+        assert_eq!(app.bottom(), Color::White);
+        // Taking a move back turns it back, and flipping by hand shows the other side.
+        type_keys(&mut app, "^u");
+        assert_eq!(app.bottom(), Color::Black);
+        type_keys(&mut app, "^f");
+        assert_eq!(app.bottom(), Color::White);
+        type_keys(&mut app, "e7e5");
+        assert_eq!(app.bottom(), Color::Black);
+        // Against the computer the board stays where the player sits.
+        let mut app = App::new(true, Settings::default());
+        app.level = Level::Beginner;
+        app.start_computer();
+        type_keys(&mut app, "e2e4");
+        assert_eq!(app.bottom(), Color::White);
+        wait_for_reply(&mut app);
+        assert_eq!(app.bottom(), Color::White);
     }
 
     #[test]
@@ -876,11 +905,15 @@ mod tests {
         click(&mut app, 4, 6);
         click(&mut app, 4, 4);
         assert_eq!(sans(&app), ["e4"]);
-        key(&mut app, KeyCode::Tab);
         // Black now sits at the bottom, with the h-file on the left.
         click(&mut app, 3, 6);
         click(&mut app, 3, 4);
         assert_eq!(sans(&app), ["e4", "e5"]);
+        // Flipped by hand, White to move is at the top: d2 is in the second row.
+        key(&mut app, KeyCode::Tab);
+        click(&mut app, 4, 1);
+        click(&mut app, 4, 3);
+        assert_eq!(sans(&app), ["e4", "e5", "d4"]);
         // A click off the board does nothing.
         app.on_mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: 2, row: 2, modifiers: KeyModifiers::NONE });
         assert_eq!(app.selected, None);

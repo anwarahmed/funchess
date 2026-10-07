@@ -41,13 +41,80 @@ const BASE: Theme = Theme {
     cursor: (40, 110, 255),
 };
 
-pub const THEMES: [Theme; 6] = [
+pub const THEMES: [Theme; 12] = [
     BASE,
     Theme { name: "wood", light: (196, 158, 108), dark: (138, 94, 58), white_shade: (190, 175, 160), black: (30, 20, 14), black_shade: (120, 100, 85), ..BASE },
     Theme { name: "ocean", light: (128, 166, 204), dark: (66, 108, 160), target: (140, 235, 130), cursor: (255, 128, 40), ..BASE },
     Theme { name: "slate", light: (150, 155, 166), dark: (94, 99, 112), white: (248, 248, 250), black: (14, 14, 18), ..BASE },
     Theme { name: "plum", light: (196, 150, 190), dark: (126, 80, 140), white: (255, 250, 242), black: (36, 18, 46), black_shade: (125, 100, 140), ..BASE },
     Theme { name: "ruby", light: (196, 134, 130), dark: (134, 62, 70), black: (28, 14, 16), black_shade: (125, 95, 100), check: (130, 50, 230), ..BASE },
+    // The colorful ones. Each changes whichever tints its own squares would swallow.
+    Theme {
+        name: "candy",
+        light: (176, 236, 214),
+        dark: (236, 112, 168),
+        black: (48, 18, 52),
+        black_shade: (140, 100, 150),
+        check: (110, 40, 200),
+        cursor: (60, 60, 235),
+        ..BASE
+    },
+    Theme {
+        name: "sunset",
+        light: (255, 196, 112),
+        dark: (168, 70, 130),
+        black: (40, 16, 44),
+        black_shade: (135, 100, 135),
+        last_move: (110, 220, 255),
+        selected: (255, 255, 235),
+        target: (60, 230, 140),
+        ..BASE
+    },
+    Theme {
+        name: "neon",
+        light: (84, 40, 150),
+        dark: (30, 10, 84),
+        white: (90, 240, 255),
+        white_shade: (40, 150, 190),
+        black: (255, 60, 170),
+        black_shade: (150, 30, 110),
+        last_move: (250, 230, 60),
+        selected: (255, 255, 255),
+        check: (255, 50, 40),
+        target: (90, 255, 120),
+        cursor: (255, 170, 40),
+    },
+    Theme {
+        name: "tropical",
+        light: (255, 190, 160),
+        dark: (20, 150, 150),
+        black: (10, 40, 48),
+        black_shade: (90, 130, 135),
+        target: (255, 90, 200),
+        cursor: (120, 40, 220),
+        ..BASE
+    },
+    Theme {
+        name: "citrus",
+        light: (236, 236, 110),
+        dark: (96, 210, 80),
+        black: (30, 44, 16),
+        black_shade: (110, 130, 90),
+        last_move: (255, 150, 60),
+        selected: (255, 255, 255),
+        target: (200, 70, 220),
+        ..BASE
+    },
+    Theme {
+        name: "aurora",
+        light: (150, 230, 200),
+        dark: (90, 90, 200),
+        black: (20, 18, 60),
+        black_shade: (105, 105, 160),
+        target: (255, 90, 200),
+        cursor: (255, 128, 40),
+        ..BASE
+    },
 ];
 
 pub fn find_theme(name: &str) -> Option<usize> {

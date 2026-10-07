@@ -191,7 +191,8 @@ else
     keys -l e2e4
     expect "game: a typed move is played" "1. e4"
     expect "game: the turn passes" "Black to move"
-    keys Up Up Up Enter Down Down Enter
+    # The board has turned to face Black, so Black's pawn is below the marker.
+    keys Down Down Down Enter Up Up Enter
     expect "game: the arrow keys and Enter move a piece" "1. e4       e5"
     keys -l qurntp
     sleep 0.2
