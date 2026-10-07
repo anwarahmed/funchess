@@ -133,8 +133,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             app.buttons.push((Rect::new(x + 17, y + row, 8, 1), Click::Key(KeyCode::Esc, false)));
         }
         Screen::Connecting(text) => {
-            let mut lines: Vec<Line> =
-                text.iter().map(|l| if l.starts_with("funchess ") { Line::styled(l.clone(), bold()) } else { Line::raw(l.clone()) }).collect();
+            let mut lines: Vec<Line> = text
+                .iter()
+                .map(|l| if l.starts_with("funchess ") || l.starts_with("sudo ") { Line::styled(l.clone(), bold()) } else { Line::raw(l.clone()) })
+                .collect();
             lines.extend([Line::raw(""), Line::styled("Esc cancel", dim())]);
             let row = lines.len() as u16 - 1;
             let (x, y) = centered(buf, area, "Network game", 2, lines);

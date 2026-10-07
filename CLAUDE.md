@@ -135,6 +135,13 @@ that `App::tick` polls every frame. One file per concern in `src/`:
 - **Direct TCP, no relay server.** The user chose this over hosting a server. It
   works on one network, a VPN, or a forwarded port (6464 by default), and not between
   two home networks otherwise. The README says so plainly.
+- **A failed join says what to do** (`net::why_not`): no answer means a firewall on
+  the host, a refusal means nobody is hosting on that port. The host's waiting screen
+  shows `sudo ufw allow <port>/tcp` when `net::firewall_command` sees ufw on with no
+  rule for the port (it reads `/etc/ufw/ufw.conf` and `user.rules`, both
+  world-readable). The user reported "cannot connect" every time in October 2026: ufw
+  on their Arch machine (Omarchy turns it on, incoming dropped) was blocking 6464. The
+  program was fine. Check the firewall first if it comes back.
 - **No take-backs in a network game**, and the computer never accepts a draw. Both are
   simplifications, not principles.
 - **With two players at one keyboard the board faces whoever is to move**

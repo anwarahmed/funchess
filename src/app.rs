@@ -294,15 +294,20 @@ impl App {
                 self.hosting = true;
                 let port = if self.port == net::DEFAULT_PORT { String::new() } else { format!(":{}", self.port) };
                 let address = net::local_ip().map_or("<this computer's address>".to_string(), |ip| ip.to_string());
-                self.screen = Screen::Connecting(vec![
+                let mut lines = vec![
                     format!("Waiting for the other player. You play {}.", self.me.name()),
                     String::new(),
                     "On the other computer, run:".into(),
                     format!("funchess join {address}{port}"),
                     String::new(),
-                    "Both computers must be on the same network, or the".into(),
-                    format!("other must be able to reach this one on port {}.", self.port),
-                ]);
+                    "Both computers must be on the same network, and this".into(),
+                    format!("one's firewall must let connections in on port {}.", self.port),
+                ];
+                // A firewall that drops the attempt is the usual reason nobody arrives.
+                if let Some(command) = net::firewall_command(self.port) {
+                    lines.extend([String::new(), "This computer's firewall is blocking that port.".into(), "To let the other player in, run:".into(), command]);
+                }
+                self.screen = Screen::Connecting(lines);
             }
             Err(e) => self.back_to_menu(format!("Cannot host on port {}: {e}", self.port)),
         }

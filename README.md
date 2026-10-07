@@ -162,7 +162,13 @@ The two programs talk directly to each other on TCP port 6464 (`funchess host 70
 picks another). That works when both computers are on the same network, or on a
 shared VPN such as Tailscale, or when the host's router forwards the port. There
 is no server in between, so two home networks cannot reach each other without one
-of those. The host's firewall must allow the port.
+of those.
+
+The host's firewall must allow the port; if it does not, the joiner is told there was
+no answer. The host's waiting screen says when it sees the `ufw` firewall blocking the
+port, and how to open it (`sudo ufw allow 6464/tcp`). On a Mac, allow incoming
+connections for the terminal, or for funchess, when macOS asks or under System Settings,
+Network, Firewall.
 
 Each side checks the other's moves against the rules, and nothing but moves and
 resign/draw/rematch messages is exchanged.
