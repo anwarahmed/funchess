@@ -544,7 +544,10 @@ fn game(buf: &mut Buffer, area: Rect, app: &mut App) {
         buf.set_stringn(area.x, area.y + 1, mode, area.width as usize, dim());
         moves(buf, Rect::new(area.x, area.y + 3, area.width, area.height.saturating_sub(3)), app);
     }
-    side_panel(buf, Rect::new(bx + board_w + GAP, by, RIGHT_WIDTH, board_h), app, left == 0);
+    // Beside the smallest board the panel also takes the row of the file letters: the
+    // commands need six rows there, and the two players and the state of the game three.
+    let panel_h = if cell_h == 1 { board_h + 1 } else { board_h };
+    side_panel(buf, Rect::new(bx + board_w + GAP, by, RIGHT_WIDTH, panel_h), app, left == 0);
 
     // The result waits until the move that brought it has been shown.
     if let Some(prompt) = app.prompt.filter(|&p| !(p == Prompt::GameOver && app.fx.is_some())) {
@@ -870,7 +873,7 @@ fn moves(buf: &mut Buffer, area: Rect, app: &App) {
 }
 
 /// Every command, with its key. Each is drawn as a button that can be clicked.
-const COMMANDS: [(&str, &str, char, bool); 10] = [
+const COMMANDS: [(&str, &str, char, bool); 11] = [
     ("?", "Help", '?', false),
     ("^G", "Hint", 'g', true),
     ("^U", "Undo", 'u', true),
@@ -880,6 +883,7 @@ const COMMANDS: [(&str, &str, char, bool); 10] = [
     ("^D", "Offer draw", 'd', true),
     ("^T", "Theme", 't', true),
     ("^P", "Pieces", 'p', true),
+    ("^S", "Sound", 's', true),
     ("^Q", "Menu", 'q', true),
 ];
 
@@ -1028,6 +1032,7 @@ fn popup(buf: &mut Buffer, area: Rect, app: &mut App, prompt: Prompt) {
                 "  Ctrl-F  flip the board (Tab works too)",
                 "  Ctrl-T  next color theme",
                 "  Ctrl-P  next way of drawing the pieces",
+                "  Ctrl-S  sound on or off",
                 "  Ctrl-Q  back to the menu",
                 "  Ctrl-C  quit at once",
                 "",
@@ -1469,7 +1474,7 @@ mod tests {
 
         // Every command fits somewhere, and the help closes on a click.
         render(&mut app, 132, 52);
-        assert_eq!(app.buttons.len(), 10);
+        assert_eq!(app.buttons.len(), 11);
         let buf = render(&mut app, 60, 12);
         assert!(text(&buf).contains("^D Offer draw"));
         click(&mut app, find(&buf, "?  Help").0, find(&buf, "?  Help").1);
@@ -1701,5 +1706,24 @@ mod tests {
         assert!(shown.contains("You win!  ★ ★ ★") && shown.contains("All three stars!"), "{shown}");
         app.pieces = Pieces::Letters;
         assert!(text(&render(&mut app, 80, 24)).contains("You win!  * * *"));
+    }
+
+    /// Eleven commands and both players, in the smallest window a game fits in.
+    #[test]
+    fn the_smallest_window_holds_every_command() {
+        let mut app = still();
+        app.start_local();
+        let buf = render(&mut app, 58, 9);
+        let shown = text(&buf);
+        for (key, name, _, _) in COMMANDS {
+            assert!(shown.contains(&format!("{key:<3}{name}")), "{key} {name} is missing from\n{shown}");
+        }
+        assert!(shown.contains("> White") && shown.contains("  Black") && shown.contains("White to move"), "{shown}");
+        assert_eq!(app.buttons.len(), COMMANDS.len());
+        let (x, y) = find(&buf, "^S Sound");
+        click(&mut app, x, y);
+        assert!(!app.sound);
+        // What a command says is shown in place of the state of the game.
+        assert!(text(&render(&mut app, 58, 9)).contains("Sound off"));
     }
 }

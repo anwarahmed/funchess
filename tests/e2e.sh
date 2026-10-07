@@ -289,6 +289,19 @@ else
     has "sound: a new game is heard" "$TMP/xdg5/funchess/sounds/start.wav" "$(cat "$TMP/played" 2>/dev/null)"
     has "sound: a move is heard" "$TMP/xdg5/funchess/sounds/move.wav" "$(cat "$TMP/played" 2>/dev/null)"
     is "sound: what is played is a WAV file" "RIFF" "$(head -c 4 "$TMP/xdg5/funchess/sounds/move.wav" 2>/dev/null)"
+    keys C-s
+    expect "sound: Ctrl-S switches it off" "Sound off"
+    sleep 0.3
+    rm -f "$TMP/played"
+    keys -l e7e5
+    expect "sound: a move is played with sound off" "1. e4       e5"
+    sleep 0.6
+    if [ -e "$TMP/played" ]; then fail "sound: something was played after Ctrl-S"; else pass "sound: switched off, nothing is played"; fi
+    is "sound: off is remembered" "sound=0" "$(grep -x 'sound=0' "$TMP/xdg5/funchess/sounds/../settings" 2>/dev/null)"
+    click "^S Sound"
+    expect "sound: a click switches it on again" "Sound on"
+    sleep 0.6
+    has "sound: switched on, it is heard at once" "move.wav" "$(cat "$TMP/played" 2>/dev/null)"
     keys C-c
     expect "sound: quits cleanly" "EXIT=0"
     rm -f "$TMP/played"

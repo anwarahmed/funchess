@@ -56,7 +56,7 @@ keys and press Enter, or type the two squares (e2 e4).
 Commands are Ctrl with a letter (shown as ^):
   ^G hint     ^U undo      ^R resign          ^D offer a draw
   ^N new game ^F flip the board               ^T theme       ^P pieces
-  ^Q menu     ^C quit      ?  help
+  ^S sound on or off       ^Q menu            ^C quit        ?  help
 In the menu T, P and Q work without Ctrl.
 
 Environment:
@@ -154,7 +154,8 @@ fn main() -> ExitCode {
         return fail("this is an interactive game and needs a terminal");
     }
     update::before_start(settings.update);
-    if app.sound && std::env::var_os("FUNCHESS_NO_SOUND").is_none() {
+    // Found even while sound is off, so that Ctrl-S has something to switch on.
+    if std::env::var_os("FUNCHESS_NO_SOUND").is_none() {
         app.speaker = sound::Speaker::find(update::state_dir().join("sounds"));
     }
 

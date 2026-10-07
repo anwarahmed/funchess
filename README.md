@@ -124,6 +124,7 @@ name a square or answer a question. In the menu the letter alone is enough: `T`,
 | `Ctrl-F` or `Tab` | flip the board (with two players at one keyboard it then faces whoever is not to move) |
 | `Ctrl-T` | next color theme |
 | `Ctrl-P` | next way of drawing the pieces |
+| `Ctrl-S` | sound on or off |
 | `Ctrl-Q` or `Esc` | back to the menu |
 | `Ctrl-C` | quit at once |
 | `?` | help |
@@ -146,8 +147,9 @@ still moving and acts at once. `funchess --animations off` switches the movement
 There are sounds for a move, a capture, castling, check, promotion, a hint, and for
 winning, losing and drawing. They are played by a program your system already has:
 `pw-play`, `paplay` or `aplay` on Linux, `afplay` on macOS; without one of them the
-game is simply silent. `funchess --sound off` switches them off (`on` brings them
-back), which is remembered, and `FUNCHESS_NO_SOUND=1` does it for one run.
+game is simply silent. `Ctrl-S` in a game switches them off and on again, and so does
+starting with `--sound off` or `--sound on`; either way it is remembered.
+`FUNCHESS_NO_SOUND=1` silences one run.
 
 Everything can also be clicked: the lines of the main menu (a setting steps
 forward, or back from its `<`), the commands beside the board, and

@@ -177,7 +177,7 @@ pub struct App {
     pub fx: Option<MoveFx>,
     /// When the confetti for a win began, or will.
     pub party: Option<Duration>,
-    /// The sound switch, kept like the update switch. What is heard is up to `speaker`.
+    /// Whether sounds are played. What plays them, if anything can, is `speaker`.
     pub sound: bool,
     pub speaker: Speaker,
     /// Sounds that wait for what they belong to: a piece landing, the result appearing.
@@ -305,7 +305,7 @@ impl App {
         self.fx = None;
         self.party = None;
         self.cues.clear();
-        self.speaker.play(Sound::Start);
+        self.play(Sound::Start);
         self.helped = 0;
         self.game = Game::new();
         self.opponent = opponent;
@@ -498,12 +498,32 @@ impl App {
         self.after_move();
     }
 
+    fn play(&mut self, sound: Sound) {
+        if self.sound {
+            self.speaker.play(sound);
+        }
+    }
+
+    /// Switches sound on or off, for this game and the next ones, and says which. On,
+    /// a move is heard, so that it can be told at once whether anything will be.
+    fn toggle_sound(&mut self) {
+        self.sound = !self.sound;
+        self.remember();
+        self.play(Sound::Move);
+        self.message = match (self.sound, self.speaker.is_on()) {
+            (false, _) => "Sound off",
+            (true, true) => "Sound on",
+            (true, false) => "Sound on, but nothing here can play it",
+        }
+        .into();
+    }
+
     /// Plays the sounds whose time has come.
     fn play_cues(&mut self, now: Duration) {
         let due: Vec<Sound> = self.cues.iter().filter(|&&(when, _)| when <= now).map(|&(_, sound)| sound).collect();
         self.cues.retain(|&(when, _)| when > now);
         for sound in due {
-            self.speaker.play(sound);
+            self.play(sound);
         }
     }
 
@@ -589,7 +609,7 @@ impl App {
 
     fn show_hint(&mut self, m: Move) {
         if self.hint.is_none() {
-            self.speaker.play(Sound::Hint);
+            self.play(Sound::Hint);
         }
         self.hint = Some(m);
         let kind = self.game.board.at(m.from).map_or("piece", |p| p.kind.name());
@@ -846,6 +866,7 @@ impl App {
             'r' => self.prompt = Some(Prompt::Resign),
             'd' => self.offer_draw(),
             'f' => self.flipped = !self.flipped,
+            's' => self.toggle_sound(),
             'n' => {
                 if self.over() || self.game.history.is_empty() {
                     self.new_game();
@@ -1616,5 +1637,34 @@ mod tests {
         }
         type_keys(&mut app, "^g^g");
         assert_eq!(app.speaker.heard, [Sound::Start, Sound::Hint]);
+    }
+
+    #[test]
+    fn sound_is_switched_off_and_on_in_the_game_and_remembered() {
+        let path = std::env::temp_dir().join(format!("funchess-sound-key-test-{}/settings", std::process::id()));
+        let mut app = local();
+        app.settings_path = Some(path.clone());
+        type_keys(&mut app, "e2e4^s");
+        assert_eq!((app.sound, app.message.as_str()), (false, "Sound off"));
+        assert!(!Settings::load(&path).sound);
+        // Nothing is asked of the speaker while it is off, not even for the end of a game.
+        type_keys(&mut app, "e7e5^g^ry");
+        app.tick();
+        assert_eq!(app.speaker.heard, [Sound::Start, Sound::Move]);
+        // Switched on again, a move is heard at once. Here nothing can play it, and it says so.
+        type_keys(&mut app, "^s");
+        assert_eq!((app.sound, app.message.as_str()), (true, "Sound on, but nothing here can play it"));
+        assert!(Settings::load(&path).sound);
+        assert_eq!(app.speaker.heard, [Sound::Start, Sound::Move, Sound::Move]);
+        // With something to play it (a program that does nothing), it only says "on".
+        app.speaker = Speaker::through("/bin/true".into(), &[], path.parent().unwrap().join("sounds"));
+        type_keys(&mut app, "^s^s");
+        assert_eq!(app.message, "Sound on");
+        // It is a command of the game: in the menu, and while a question is open, it waits.
+        type_keys(&mut app, "^n^r^s");
+        assert!(app.sound && app.prompt == Some(Prompt::Resign));
+        type_keys(&mut app, "n^q^s");
+        assert!(app.sound && matches!(app.screen, Screen::Menu));
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }
