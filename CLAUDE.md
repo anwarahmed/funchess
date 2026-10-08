@@ -121,6 +121,16 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   so. Whatever is added around or onto a piece goes to both colors. Captured pieces
   listed as text (hollow glyphs for white, filled for black) and `letters` (K and k)
   still differ, since there the shape is what tells the colors apart.
+- **Both sides' pieces are colors, each with a darker tone of itself as its shade**
+  (0.2.5; `Theme::white`, `white_shade`, `black`, `black_shade`), in every theme, at
+  the user's request in October 2026. They said neon was the only theme in which the
+  shaded pieces looked good, liked four more made the same way (arcade, lava, galaxy,
+  lagoon: bright pieces on dark squares), and called the white and near-black pieces
+  of the older themes "gray blurry blobs". So no theme has white, gray or black
+  pieces any more: the side called White is the paler color and Black the deeper one,
+  and `every_piece_color_has_a_darker_shade` keeps the shades darker. A new theme
+  names all twelve colors and goes into `THEMES`, `USAGE` and the `--theme` error in
+  `main.rs`, and the README.
 - **Animation is only ever a way of showing a position that is already final.** A move
   is played at once (`Game::play`); `App::moved` then keeps a `MoveFx` until it has
   been shown. `ui::game` draws the squares as they were while the piece is on its way
