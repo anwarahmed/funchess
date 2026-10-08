@@ -11,10 +11,11 @@ pub struct Theme {
     pub name: &'static str,
     pub light: Rgb,
     pub dark: Rgb,
-    /// The white pieces, and the darker tone for their details and shadows.
+    /// The white pieces, and the darker tone for their details and shadows. They are
+    /// a color, not white: white shaded with gray looked like a blur.
     pub white: Rgb,
     pub white_shade: Rgb,
-    /// The black pieces, and the lighter tone for their details and highlights.
+    /// The black pieces, and the darker tone for theirs.
     pub black: Rgb,
     pub black_shade: Rgb,
     /// Tints for the squares of the last move, the picked-up piece and a king in check.
@@ -28,12 +29,12 @@ pub struct Theme {
 
 const BASE: Theme = Theme {
     name: "forest",
+    white: (255, 236, 150),
+    white_shade: (214, 170, 70),
+    black: (150, 64, 190),
+    black_shade: (84, 28, 120),
     light: (142, 170, 120),
     dark: (92, 124, 82),
-    white: (255, 255, 255),
-    white_shade: (165, 170, 185),
-    black: (22, 20, 24),
-    black_shade: (105, 105, 120),
     last_move: (236, 214, 84),
     selected: (255, 244, 150),
     check: (224, 62, 52),
@@ -41,30 +42,82 @@ const BASE: Theme = Theme {
     cursor: (40, 110, 255),
 };
 
-pub const THEMES: [Theme; 12] = [
+pub const THEMES: [Theme; 16] = [
     BASE,
-    Theme { name: "wood", light: (196, 158, 108), dark: (138, 94, 58), white_shade: (190, 175, 160), black: (30, 20, 14), black_shade: (120, 100, 85), ..BASE },
-    Theme { name: "ocean", light: (128, 166, 204), dark: (66, 108, 160), target: (140, 235, 130), cursor: (255, 128, 40), ..BASE },
-    Theme { name: "slate", light: (150, 155, 166), dark: (94, 99, 112), white: (248, 248, 250), black: (14, 14, 18), ..BASE },
-    Theme { name: "plum", light: (196, 150, 190), dark: (126, 80, 140), white: (255, 250, 242), black: (36, 18, 46), black_shade: (125, 100, 140), ..BASE },
-    Theme { name: "ruby", light: (196, 134, 130), dark: (134, 62, 70), black: (28, 14, 16), black_shade: (125, 95, 100), check: (130, 50, 230), ..BASE },
+    Theme {
+        name: "wood",
+        white: (255, 244, 214),
+        white_shade: (214, 184, 130),
+        black: (24, 128, 140),
+        black_shade: (8, 70, 84),
+        light: (196, 158, 108),
+        dark: (138, 94, 58),
+        ..BASE
+    },
+    Theme {
+        name: "ocean",
+        white: (255, 226, 110),
+        white_shade: (214, 160, 40),
+        black: (190, 48, 136),
+        black_shade: (112, 16, 84),
+        light: (128, 166, 204),
+        dark: (66, 108, 160),
+        target: (140, 235, 130),
+        cursor: (255, 128, 40),
+        ..BASE
+    },
+    Theme {
+        name: "slate",
+        white: (255, 214, 90),
+        white_shade: (206, 150, 30),
+        black: (50, 104, 190),
+        black_shade: (20, 54, 120),
+        light: (150, 155, 166),
+        dark: (94, 99, 112),
+        ..BASE
+    },
+    Theme {
+        name: "plum",
+        white: (255, 246, 190),
+        white_shade: (220, 186, 110),
+        black: (30, 136, 104),
+        black_shade: (10, 78, 62),
+        light: (196, 150, 190),
+        dark: (126, 80, 140),
+        ..BASE
+    },
+    Theme {
+        name: "ruby",
+        white: (255, 240, 200),
+        white_shade: (220, 180, 120),
+        black: (40, 100, 160),
+        black_shade: (14, 52, 96),
+        light: (196, 134, 130),
+        dark: (134, 62, 70),
+        check: (130, 50, 230),
+        ..BASE
+    },
     // The colorful ones. Each changes whichever tints its own squares would swallow.
     Theme {
         name: "candy",
+        white: (255, 250, 170),
+        white_shade: (230, 190, 70),
+        black: (30, 120, 170),
+        black_shade: (12, 68, 108),
         light: (176, 236, 214),
         dark: (236, 112, 168),
-        black: (48, 18, 52),
-        black_shade: (140, 100, 150),
         check: (110, 40, 200),
         cursor: (60, 60, 235),
         ..BASE
     },
     Theme {
         name: "sunset",
+        white: (255, 252, 220),
+        white_shade: (225, 190, 140),
+        black: (88, 60, 180),
+        black_shade: (42, 22, 110),
         light: (255, 196, 112),
         dark: (168, 70, 130),
-        black: (40, 16, 44),
-        black_shade: (135, 100, 135),
         last_move: (110, 220, 255),
         selected: (255, 255, 235),
         target: (60, 230, 140),
@@ -86,20 +139,24 @@ pub const THEMES: [Theme; 12] = [
     },
     Theme {
         name: "tropical",
+        white: (255, 250, 180),
+        white_shade: (226, 190, 80),
+        black: (170, 48, 116),
+        black_shade: (98, 16, 66),
         light: (255, 190, 160),
         dark: (20, 150, 150),
-        black: (10, 40, 48),
-        black_shade: (90, 130, 135),
         target: (255, 90, 200),
         cursor: (120, 40, 220),
         ..BASE
     },
     Theme {
         name: "citrus",
+        white: (255, 255, 245),
+        white_shade: (150, 200, 230),
+        black: (36, 100, 180),
+        black_shade: (12, 54, 112),
         light: (236, 236, 110),
         dark: (96, 210, 80),
-        black: (30, 44, 16),
-        black_shade: (110, 130, 90),
         last_move: (255, 150, 60),
         selected: (255, 255, 255),
         target: (200, 70, 220),
@@ -107,13 +164,73 @@ pub const THEMES: [Theme; 12] = [
     },
     Theme {
         name: "aurora",
+        white: (255, 248, 190),
+        white_shade: (226, 188, 90),
+        black: (160, 44, 140),
+        black_shade: (92, 14, 82),
         light: (150, 230, 200),
         dark: (90, 90, 200),
-        black: (20, 18, 60),
-        black_shade: (105, 105, 160),
         target: (255, 90, 200),
         cursor: (255, 128, 40),
         ..BASE
+    },
+    // The glowing ones, after neon: dark squares, and pieces in two bright colors, each
+    // with a darker tone of itself for its details and shadows.
+    Theme {
+        name: "arcade",
+        light: (44, 72, 156),
+        dark: (16, 28, 88),
+        white: (255, 176, 56),
+        white_shade: (190, 104, 24),
+        black: (110, 236, 116),
+        black_shade: (40, 150, 72),
+        last_move: (200, 120, 255),
+        selected: (255, 255, 255),
+        check: (255, 50, 40),
+        target: (255, 110, 200),
+        cursor: (90, 220, 255),
+    },
+    Theme {
+        name: "lava",
+        light: (124, 46, 42),
+        dark: (62, 18, 26),
+        white: (140, 226, 255),
+        white_shade: (60, 150, 200),
+        black: (255, 156, 44),
+        black_shade: (180, 84, 20),
+        last_move: (255, 240, 120),
+        selected: (255, 255, 255),
+        check: (190, 90, 255),
+        target: (90, 255, 120),
+        cursor: (60, 120, 255),
+    },
+    Theme {
+        name: "galaxy",
+        light: (50, 58, 100),
+        dark: (16, 18, 46),
+        white: (255, 240, 150),
+        white_shade: (200, 170, 80),
+        black: (200, 132, 255),
+        black_shade: (120, 70, 190),
+        last_move: (90, 200, 255),
+        selected: (255, 255, 255),
+        check: (255, 50, 40),
+        target: (90, 255, 120),
+        cursor: (255, 170, 40),
+    },
+    Theme {
+        name: "lagoon",
+        light: (24, 100, 104),
+        dark: (8, 54, 66),
+        white: (255, 250, 200),
+        white_shade: (200, 180, 120),
+        black: (255, 112, 124),
+        black_shade: (170, 50, 84),
+        last_move: (250, 230, 60),
+        selected: (255, 255, 255),
+        check: (190, 90, 255),
+        target: (120, 255, 120),
+        cursor: (255, 170, 40),
     },
 ];
 
@@ -236,6 +353,16 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_piece_color_has_a_darker_shade() {
+        let luma = |(r, g, b): Rgb| 299 * r as u32 + 587 * g as u32 + 114 * b as u32;
+        for theme in &THEMES {
+            assert!(luma(theme.white_shade) < luma(theme.white), "{}", theme.name);
+            assert!(luma(theme.black_shade) < luma(theme.black), "{}", theme.name);
+            assert!(luma(theme.black) < luma(theme.white), "{}", theme.name);
+        }
+    }
 
     #[test]
     fn settings_survive_a_round_trip_and_bad_input() {

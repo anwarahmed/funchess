@@ -159,8 +159,11 @@ the answers in a question box.
 
 ## Looks
 
-Twelve color themes: forest, wood, ocean, slate, plum and ruby, and the more colorful
-candy, sunset, neon, tropical, citrus and aurora. Five ways of drawing the pieces:
+Sixteen color themes: forest, wood, ocean, slate, plum and ruby, the more colorful
+candy, sunset, tropical, citrus and aurora, and the glowing neon, arcade, lava, galaxy
+and lagoon, with bright pieces on dark squares. In every theme the two sides are two
+colors (gold and purple in forest, say) rather than white and black: White is the
+paler one. Five ways of drawing the pieces:
 
 | Style | |
 |---|---|

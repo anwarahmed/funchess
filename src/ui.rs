@@ -735,6 +735,8 @@ impl Sprite {
                 let (bright, middle, dim) = if white {
                     (theme.white, mix(theme.white, theme.white_shade, 0.4), theme.white_shade)
                 } else {
+                    // The shade is the darker tone for both colors, so on a black piece
+                    // it is the piece's own color that catches the eye.
                     (theme.black_shade, mix(theme.black, theme.black_shade, 0.35), theme.black)
                 };
                 Some(if clear(x + 1, y) || clear(x, y + 1) {
