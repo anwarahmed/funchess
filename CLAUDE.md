@@ -112,8 +112,15 @@ that `App::tick` polls every frame. One file per concern in `src/`:
   lower. A square of height `h` rows is `2h` columns wide, so `2h` pixels square.
   The art exists at 8, 10 and 12 pixels (`SMALL`, `MEDIUM`, `LARGE`); the largest
   size or whole multiple that fits is centered. Rims and shading are worked out from
-  the shape (`Cell::pixels`), not drawn into the art. Below 4 rows a square holds a
+  the shape (`Sprite::color`), not drawn into the art. Below 4 rows a square holds a
   chess symbol or a letter.
+- **A black piece and its white twin are the same shape in every pixel-art style**
+  (0.2.4), at the user's request in October 2026: they saw a rim around the white
+  pieces of `solid` and `shaded` that the black ones did not have. Both now get the
+  same soft dark rim, and `both_colors_have_the_same_outline_in_every_style` keeps it
+  so. Whatever is added around or onto a piece goes to both colors. Captured pieces
+  listed as text (hollow glyphs for white, filled for black) and `letters` (K and k)
+  still differ, since there the shape is what tells the colors apart.
 - **Animation is only ever a way of showing a position that is already final.** A move
   is played at once (`Game::play`); `App::moved` then keeps a `MoveFx` until it has
   been shown. `ui::game` draws the squares as they were while the piece is on its way
