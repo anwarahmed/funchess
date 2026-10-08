@@ -748,9 +748,9 @@ impl Sprite {
             b'#' => Some(if white { theme.white } else { theme.black }),
             _ if clear(x + 1, y) && clear(x - 1, y) && clear(x, y + 1) && clear(x, y - 1) => None,
             _ if app.pieces == Pieces::Outlined => Some(if white { theme.black } else { mix(ground, theme.white, 0.8) }),
-            // White pieces get a soft dark rim so they stand out on a light square.
-            _ if white => Some(mix(ground, (0, 0, 0), 0.5)),
-            _ => None,
+            // A soft dark rim, so a white piece stands out on a light square. A black
+            // piece has it too: the two colors are the same shape in every style.
+            _ => Some(mix(ground, (0, 0, 0), 0.5)),
         }
     }
 }
@@ -1203,6 +1203,23 @@ mod tests {
     fn keys(app: &mut App, typed: &str) {
         for c in typed.chars() {
             app.on_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+        }
+    }
+
+    #[test]
+    fn both_colors_have_the_same_outline_in_every_style() {
+        for pieces in Pieces::ALL.into_iter().filter(|p| p.is_pixel_art()) {
+            let mut app = still();
+            app.pieces = pieces;
+            for kind in [Kind::King, Kind::Queen, Kind::Rook, Kind::Bishop, Kind::Knight, Kind::Pawn] {
+                for n in [8, 10, 12, 14, 16, 20, 24, 36] {
+                    let shape = |color| {
+                        let sprite = Sprite::new(Piece { color, kind }, n, Pose::Upright);
+                        (0..n * n).map(|i| sprite.color(&app, i % n, i / n, (120, 120, 120)).is_some()).collect::<Vec<bool>>()
+                    };
+                    assert_eq!(shape(Color::White), shape(Color::Black), "{pieces:?} {kind:?} at {n}");
+                }
+            }
         }
     }
 
